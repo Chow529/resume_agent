@@ -8,15 +8,12 @@ project_root = Path(__file__).parent.parent
 if str(project_root) not in sys.path:
     sys.path.insert(0, str(project_root))
 
-import os    
-from utils.path_tool import get_abs_path             
-from langchain_text_splitters import RecursiveCharacterTextSplitter
-from model.MoelFactory import *
+              
+from model.MoelFactory import ChatModelIni
 from utils.readyml_tool import load_yaml_config,load_txt,load_pdf
 from langchain_core.prompts import PromptTemplate
 from langchain_core.output_parsers import StrOutputParser
-from langchain_chroma import Chroma
-from langchain_core.vectorstores import VectorStoreRetriever
+
 
 class JobServies (object) :
     def __init__(self) -> None:
@@ -52,29 +49,7 @@ class SummServer(object):
         return self.chain.invoke({"input":content})
 
 
-class RagServer (object):
-    def __init__(self) -> None:
-        path = get_abs_path("rag_knowladge")
-        if not os.path.exists(path) :
-            os.makedirs(path)
 
-        self.chroma = Chroma(
-            collection_name="job_jd",
-            embedding_function= EmbeddingModelIni().InitModel(),
-            persist_directory= path
-        )
-
-        self.spliter = RecursiveCharacterTextSplitter(
-            separators=["\n\n","\n",""],
-            chunk_size=600,
-            chunk_overlap=100,
-            length_function=len
-        )
-
-        self.retriever = self.chroma.as_retriever(search_kwargs={'k': 5})
-
-    def get_retriever (self) ->VectorStoreRetriever:
-        return self.retriever
 
 if __name__ == "__main__":
     res = JobServies().get_job()
