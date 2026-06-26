@@ -74,25 +74,33 @@ class ChromaServer (object):
         
         listStr = self.spliter.split_text(content)
         
-        idsList = [self.ChangeToMd5(id) for id in listStr if self.CheckMd5(self.ChangeToMd5(id))]
-
+        idsList=[]
+        for id in listStr:
+            md5 = self.ChangeToMd5(id)
+            if self.CheckMd5(md5):
+                idsList.append(md5)
+                self.__storageMd5(md5)
 
         self.chroma.add_texts(texts = listStr,ids = idsList)
 
 
-    def StorageMd5(self,md5:str):
+    def __storageMd5(self,md5:str):
         """
         存储md5值,将文本转化成md5值进行存储(去重使用)
 
         :param md5: 文本信息(转化成md5值)
         :type md5: str
         """
+        try:
+            if not os.path.exists(MD5PATH) :
+                os.makedirs(MD5PATH)
 
-        if not os.path.exists(MD5PATH) :
-            os.makedirs(MD5PATH)
-
-        with open(MD5PATH,'a',encoding = "utf-8") as f:
-            f.write(md5 + "\n")
+            with open(MD5PATH,'a',encoding = "utf-8") as f:
+                f.write(md5 + "\n")
+        except FileNotFoundError:
+            logger.error(f"文件不存在")
+        except Exception as e:
+            logger.error(f"操作失败: {e}")
 
 
     def CheckMd5(self,md5 :str) ->bool:
@@ -110,7 +118,13 @@ class ChromaServer (object):
         
         return True
 
-    def _delectMd5(self,md5:str):
+    def __delectMd5(self,md5:str):
+        """
+        删除文本内指定md5值
+        
+        :param md5: 说明
+        :type md5: str
+        """
         try:
             # 1. 读取文件所有内容
             with open(MD5PATH, 'r', encoding='utf-8') as f:
@@ -133,12 +147,21 @@ class ChromaServer (object):
         except Exception as e:
             logger.error(f"操作失败: {e}")
 
-    def _delectVector(self,md5:str):
+    def __delectVector(self,md5:str):
+        """
+        删除指定md5值的向量库内容
+        
+        :param md5: 说明
+        :type md5: str
+        """
         self.chroma.delete([md5])
 
 
     def DelectValue(self,md5:str):
+        """
+        包装内部的删除md5同时删除文本以及向量库内容
+        """
         if self.CheckMd5(md5) :
-            self._delectMd5(md5)
-            self._delectVector(md5)
+            self.__delectMd5(md5)
+            self.__delectVector(md5)
     
