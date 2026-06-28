@@ -32,21 +32,29 @@ class JobServies (object) :
         resume_content = userResum if len(userResum) else "无简历信息"
         return self.chain.invoke({"resume_content": resume_content})
 
-class SummServer(object):
-    def __init__(self,content : str) -> None:
-       
-        prompt = load_yaml_config("prompt/prompt.yml")["SUMM_PROMPT"] # type: ignore
+class SummServer:
+    def __init__(self,content : str,porompt : str) -> None:
+       """
+       content : 文本信息
+       porompt : 提示词
+       """
+
+        prompt = load_yaml_config("prompt/prompt.yml")[porompt] # type: ignore
         self.prompt_txt = prompt #jobhunter
 
         self.prompt = PromptTemplate.from_template(self.prompt_txt)
         self.chatmodel = ChatModelIni().InitModel()
         self.chain = self.prompt | self.chatmodel | StrOutputParser()
         
-        self.content = self._get_content(content)
+        self.content = self.__get_content(content)
 
 
-    def _get_content (self,content: str) ->str:
+    def __get_content (self,content: str) ->str:
         return self.chain.invoke({"input":content})
+    
+    @property
+    def content (self) -> str:
+        return self.content
 
 
 
