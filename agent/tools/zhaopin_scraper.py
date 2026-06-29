@@ -274,7 +274,7 @@ def get_job_summary(city_name: str, keywords: list, output_filename: str = None)
 
     # 保存 CSV
     output_path = os.path.join(os.path.dirname(__file__), output_filename)
-    save_csv(jobs, output_path)
+    # save_csv(jobs, output_path)
 
     # ========== 统计分析 ==========
     print(f"\n{'='*70}")

@@ -19,12 +19,12 @@ from utils.logging_tool import logger
 import hashlib
 import textwrap
 
-MD5PATH= get_abs_path("/knowladge/md5.txt")
+MD5PATH= get_abs_path("rag_knowladge/md5.txt")
 RAGPATH = get_abs_path("rag_knowladge")
 """
 向量库存储,获取,读取
 """
-class ChromaServer (object):
+class ChromaServer :
     def __init__(self) -> None:
         path = RAGPATH
         if not os.path.exists(path) :
@@ -80,6 +80,8 @@ class ChromaServer (object):
             if self.CheckMd5(md5):
                 idsList.append(md5)
                 self.__storageMd5(md5)
+            else :
+                return 
 
         self.chroma.add_texts(texts = listStr,ids = idsList)
 
@@ -92,8 +94,10 @@ class ChromaServer (object):
         :type md5: str
         """
         try:
-            if not os.path.exists(MD5PATH) :
-                os.makedirs(MD5PATH)
+            if not os.path.exists(MD5PATH):
+                os.makedirs(os.path.dirname(MD5PATH), exist_ok=True)
+                with open(MD5PATH, 'w', encoding='utf-8') as f:
+                    f.write('')
 
             with open(MD5PATH,'a',encoding = "utf-8") as f:
                 f.write(md5 + "\n")
@@ -110,6 +114,7 @@ class ChromaServer (object):
         :param md5: md5值
         :type md5: str
         """
+
         with open(MD5PATH, 'r', encoding='utf-8') as f:
             lines = f.readlines()
 

@@ -13,11 +13,10 @@ from model.MoelFactory import ChatModelIni
 from utils.readyml_tool import load_yaml_config,load_txt,load_pdf
 from langchain_core.prompts import PromptTemplate
 from langchain_core.output_parsers import StrOutputParser
-
+from langchain_core.documents import Document
 
 class JobServies (object) :
-    def __init__(self) -> None:
-       
+    def __init__(self) -> None:      
         prompt = load_yaml_config("prompt/prompt.yml")["RAG_PROMPT"] # type: ignore
         self.prompt_txt = prompt #jobhunter
         
@@ -29,24 +28,30 @@ class JobServies (object) :
 
     def get_job (self) -> str:
         userResum = load_pdf()
-        resume_content = userResum if len(userResum) else "无简历信息"
+        resume_content = "简历内容如下:\n"
+        if len(userResum) :
+            for ctn in userResum :
+                resume_content += ctn.page_content
+        else : 
+            resume_content += "无简历信息"
+
         return self.chain.invoke({"resume_content": resume_content})
 
 class SummServer:
     def __init__(self,content : str,porompt : str) -> None:
-       """
-       content : 文本信息
-       porompt : 提示词
-       """
+        """
+        content : 文本信息
+        porompt : 提示词
+        """
 
         prompt = load_yaml_config("prompt/prompt.yml")[porompt] # type: ignore
-        self.prompt_txt = prompt #jobhunter
+        self.prompt_txt = prompt       #jobhunter
 
         self.prompt = PromptTemplate.from_template(self.prompt_txt)
         self.chatmodel = ChatModelIni().InitModel()
         self.chain = self.prompt | self.chatmodel | StrOutputParser()
         
-        self.content = self.__get_content(content)
+        self._content = self.__get_content(content)
 
 
     def __get_content (self,content: str) ->str:
@@ -54,7 +59,7 @@ class SummServer:
     
     @property
     def content (self) -> str:
-        return self.content
+        return self._content
 
 
 

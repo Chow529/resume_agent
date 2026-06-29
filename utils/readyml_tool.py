@@ -52,7 +52,7 @@ def load_txt(dir :str) -> list[Document]:
 
 
 
-def load_pdf(dir :str = "job/jobhunter.pdf") :
+def load_pdf(dir :str = "job/jobhunter.pdf") ->list[Document]:
     
     path = get_abs_path(dir)
     documents = []
