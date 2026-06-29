@@ -26,9 +26,11 @@ def get_job_working () -> str:
 
     listSumm = content.split('\n')
     # print(listSumm)
-    
+
     chroma = ChromaServer()
-    for summ in listSumm: chroma.StorageVector(summ)
+    for summ in listSumm: 
+        if summ.strip() != "none":
+            chroma.StorageVector(summ)
 
     return contentStr
 
