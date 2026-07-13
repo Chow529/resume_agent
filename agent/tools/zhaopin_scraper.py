@@ -93,7 +93,7 @@ def search_jobs(keyword: str, city_code: str, page: int = 1) -> dict:
             params=params,
             headers=headers,
             impersonate="chrome120",
-            timeout=20,
+            timeout=10,
         )
         return extract_state_from_html(r.text)
     except Exception as e:
@@ -180,7 +180,7 @@ def scrape_all(city_name: str, keywords: list) -> list:
 
         position_count = state.get("positionCount", 0)
         pages = state.get("pages", 1)
-        print(f"  📊 共找到 {position_count} 个职位，{pages} 页")
+        # print(f"  📊 共找到 {position_count} 个职位，{pages} 页")
 
         # 处理第一页
         for pos in state.get("positionList", []):
@@ -195,11 +195,11 @@ def scrape_all(city_name: str, keywords: list) -> list:
 
         # 获取后续页面
         for page in range(2, pages + 1):
-            print(f"  🔄 正在获取第 {page}/{pages} 页...")
+            # print(f"  🔄 正在获取第 {page}/{pages} 页...")
             time.sleep(REQUEST_DELAY)
             state = search_jobs(keyword, city_code, page=page)
             if not state:
-                print(f"  ⚠️ 第 {page} 页获取失败，跳过")
+                # print(f"  ⚠️ 第 {page} 页获取失败，跳过")
                 continue
             for pos in state.get("positionList", []):
                 job_id = pos.get("jobId") or pos.get("number") or pos.get("uuid")
@@ -210,7 +210,7 @@ def scrape_all(city_name: str, keywords: list) -> list:
 
         time.sleep(REQUEST_DELAY)
 
-    print(f"\n✅ 爬取完成！共获取 {len(all_jobs)} 条去重职位数据")
+    # print(f"\n✅ 爬取完成！共获取 {len(all_jobs)} 条去重职位数据")
     return list(all_jobs.values())
 
 
@@ -233,8 +233,8 @@ def save_csv(jobs: list, filename: str):
         writer.writeheader()
         writer.writerows(jobs)
 
-    print(f"💾 CSV 已保存到: {filename}")
-    print(f"📊 共 {len(jobs)} 条职位数据")
+    # print(f"💾 CSV 已保存到: {filename}")
+    # print(f"📊 共 {len(jobs)} 条职位数据")
 
 
 def get_job_summary(city_name: str, keywords: list, output_filename: str = None):
@@ -261,31 +261,30 @@ def get_job_summary(city_name: str, keywords: list, output_filename: str = None)
     print(f"🚀 智联招聘爬虫")
     print(f"📍 城市: {city_name}")
     print(f"🔍 搜索关键词: {', '.join(keywords)}")
-    print(f"📁 输出文件: {output_filename}")
+    # print(f"📁 输出文件: {output_filename}")
     print(f"⏰ 开始时间: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}")
     print("=" * 70)
 
-    # 爬取数据
+    # 爬取数据 (静默模式,不打印进度)
     jobs = scrape_all(city_name, keywords)
 
     if not jobs:
-        print("❌ 未获取到任何职位数据！")
         return {"jobs": [], "stats": {}}
 
     # 保存 CSV
     output_path = os.path.join(os.path.dirname(__file__), output_filename)
     # save_csv(jobs, output_path)
 
-    # ========== 统计分析 ==========
-    print(f"\n{'='*70}")
-    print("📈 统计分析")
-    print("=" * 70)
+    # 统计分析 (静默模式)
+    # print(f"\n{'='*70}")
+    # print("📈 统计分析")
+    # print("=" * 70)
 
     # 1. 总体统计
     companies = set(j.get("公司名称", "") for j in jobs if j.get("公司名称"))
-    print(f"\n📊 总体统计:")
-    print(f"  - 去重后职位数: {len(jobs)}")
-    print(f"  - 涉及公司数: {len(companies)}")
+    # print(f"\n📊 总体统计:")
+    # print(f"  - 去重后职位数: {len(jobs)}")
+    # print(f"  - 涉及公司数: {len(companies)}")
 
     # 2. 薪资分布
     salary_levels = {"10K以下": 0, "10K-20K": 0, "20K-30K": 0, "30K-50K": 0, "50K以上": 0, "面议": 0, "实习": 0}
@@ -322,53 +321,54 @@ def get_job_summary(city_name: str, keywords: list, output_filename: str = None)
             else:
                 salary_levels["面议"] += 1
 
-    print(f"\n💰 薪资分布:")
-    for level, count in salary_levels.items():
-        if count > 0:
-            print(f"  - {level}: {count} 个 ({count/len(jobs)*100:.1f}%)")
+    # print(f"\n💰 薪资分布:")
+    # for level, count in salary_levels.items():
+    #     if count > 0:
+    #         print(f"  - {level}: {count} 个 ({count/len(jobs)*100:.1f}%)")
 
     # 计算平均薪资（仅统计有明确薪资的）
+    avg_salary = None
     if salary_list:
         avg_salary = sum(salary_list) / len(salary_list)
-        print(f"\n  📊 平均薪资（有明确薪资的岗位）: {avg_salary/10000:.1f}K/月")
-        print(f"  💰 最高薪资: {max(salary_list)/10000:.1f}K/月")
-        print(f"  💰 最低薪资: {min(salary_list)/10000:.1f}K/月")
+        # print(f"\n  📊 平均薪资（有明确薪资的岗位）: {avg_salary/10000:.1f}K/月")
+        # print(f"  💰 最高薪资: {max(salary_list)/10000:.1f}K/月")
+        # print(f"  💰 最低薪资: {min(salary_list)/10000:.1f}K/月")
 
     # 3. 学历要求分布
-    print(f"\n🎓 学历要求分布:")
+    # print(f"\n🎓 学历要求分布:")
     edu_levels = {}
     for j in jobs:
         edu = j.get("学历要求", "不限")
         if not edu:
             edu = "不限"
         edu_levels[edu] = edu_levels.get(edu, 0) + 1
-    for edu, count in sorted(edu_levels.items(), key=lambda x: x[1], reverse=True):
-        print(f"  - {edu}: {count} 个 ({count/len(jobs)*100:.1f}%)")
+    # for edu, count in sorted(edu_levels.items(), key=lambda x: x[1], reverse=True):
+    #     print(f"  - {edu}: {count} 个 ({count/len(jobs)*100:.1f}%)")
 
     # 4. 经验要求分布
-    print(f"\n💼 经验要求分布:")
+    # print(f"\n💼 经验要求分布:")
     exp_levels = {}
     for j in jobs:
         exp = j.get("经验要求", "不限")
         if not exp:
             exp = "不限"
         exp_levels[exp] = exp_levels.get(exp, 0) + 1
-    for exp, count in sorted(exp_levels.items(), key=lambda x: x[1], reverse=True):
-        print(f"  - {exp}: {count} 个 ({count/len(jobs)*100:.1f}%)")
+    # for exp, count in sorted(exp_levels.items(), key=lambda x: x[1], reverse=True):
+    #     print(f"  - {exp}: {count} 个 ({count/len(jobs)*100:.1f}%)")
 
     # 5. 公司规模分布
-    print(f"\n🏢 公司规模分布:")
+    # print(f"\n🏢 公司规模分布:")
     size_levels = {}
     for j in jobs:
         size = j.get("公司规模", "未知")
         if not size:
             size = "未知"
         size_levels[size] = size_levels.get(size, 0) + 1
-    for size, count in sorted(size_levels.items(), key=lambda x: x[1], reverse=True)[:5]:
-        print(f"  - {size}: {count} 个")
+    # for size, count in sorted(size_levels.items(), key=lambda x: x[1], reverse=True)[:5]:
+    #     print(f"  - {size}: {count} 个")
 
     # 6. 热门技能标签 Top 10
-    print(f"\n🏷️ 热门技能标签 Top 10:")
+    # print(f"\n🏷️ 热门技能标签 Top 10:")
     skill_count = {}
     for j in jobs:
         skills = j.get("技能标签", "")
@@ -376,11 +376,11 @@ def get_job_summary(city_name: str, keywords: list, output_filename: str = None)
             for skill in skills.split(", "):
                 if skill.strip():
                     skill_count[skill] = skill_count.get(skill, 0) + 1
-    for skill, count in sorted(skill_count.items(), key=lambda x: x[1], reverse=True)[:10]:
-        print(f"  - {skill}: {count} 次")
+    # for skill, count in sorted(skill_count.items(), key=lambda x: x[1], reverse=True)[:10]:
+    #     print(f"  - {skill}: {count} 次")
 
     # 7. 薪资最高的前10个岗位
-    print(f"\n🏆 薪资最高的 Top 10 岗位:")
+    # print(f"\n🏆 薪资最高的 Top 10 岗位:")
     sorted_jobs = sorted(
         [j for j in jobs if j.get("薪资") and "面议" not in j.get("薪资") and "天" not in j.get("薪资")],
         key=lambda x: extract_salary_value(x.get("薪资", "0")),
@@ -393,7 +393,7 @@ def get_job_summary(city_name: str, keywords: list, output_filename: str = None)
 
     print(f"\n{'='*70}")
     print(f"✅ 爬取完成！")
-    print(f"📁 数据已保存到: {output_path}")
+    # print(f"📁 数据已保存到: {output_path}")
     print(f"⏰ 结束时间: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}")
     print("=" * 70)
 
