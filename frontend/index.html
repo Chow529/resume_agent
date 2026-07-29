@@ -41,92 +41,217 @@
             line-height: 1.65;
         }
 
-        .container { max-width: 1200px; margin: 0 auto; }
+        .container { max-width: 960px; margin: 0 auto; }
 
         .header {
-            background: linear-gradient(135deg, var(--color-canvas-soft), var(--color-canvas));
-            border-bottom: 2px solid var(--color-primary);
-            margin-bottom: var(--spacing-lg);
-            padding: var(--spacing-lg) var(--spacing-md);
-            position: relative;
-            overflow: hidden;
-        }
-        .header::before {
-            content: '';
-            position: absolute;
-            top: -50%;
-            right: -50%;
-            width: 100%;
-            height: 100%;
-            background: radial-gradient(circle, rgba(0, 217, 146, 0.1) 0%, transparent 70%);
-            z-index: 0;
-        }
-        .header h1 {
-            margin: 0 0 var(--spacing-xs) 0;
-            font-size: 60px;
-            font-weight: 400;
-            letter-spacing: -0.65px;
-            color: var(--color-ink-strong);
-            position: relative;
-            z-index: 1;
-        }
-        .header .subtitle {
-            margin: 0;
-            font-size: 14px;
-            color: var(--color-body);
-            position: relative;
-            z-index: 1;
-        }
-
-        .commands {
-            background: linear-gradient(135deg, rgba(26, 26, 26, 0.8), rgba(16, 16, 16, 0.8));
-            backdrop-filter: blur(10px);
-            -webkit-backdrop-filter: blur(10px);
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            background: var(--color-canvas-soft);
             border: 1px solid var(--color-hairline);
             border-radius: var(--radius-md);
-            padding: var(--spacing-2xl);
-            margin-bottom: var(--spacing-lg);
-            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
+            margin-bottom: var(--spacing-sm);
+            padding: var(--spacing-sm) var(--spacing-md);
         }
-        .commands h3 {
-            margin: 0 0 var(--spacing-sm) 0;
-            font-size: 16px;
+        .header-left h1 {
+            margin: 0;
+            font-size: 18px;
             font-weight: 600;
+            letter-spacing: -0.4px;
             color: var(--color-ink-strong);
             display: flex;
             align-items: center;
             gap: 8px;
         }
-        .commands ul { margin: 8px 0; padding-left: 20px; color: var(--color-body); }
-        .commands li { margin: 4px 0; font-size: 14px; }
-        .commands code {
-            font-family: SFMono-Regular, Menlo, Monaco, Consolas, 'Liberation Mono', 'Courier New', monospace;
-            font-size: 13px;
+        .header-left h1 i {
+            color: var(--color-primary);
+        }
+        .header-left .subtitle {
+            margin: 2px 0 0 0;
+            font-size: 11px;
+            color: var(--color-mute);
+        }
+
+        .header-right {
+            display: flex;
+            gap: 8px;
+            align-items: center;
+        }
+
+        .status-indicator {
+            display: flex;
+            align-items: center;
+            gap: 6px;
+            font-size: 11px;
+            color: var(--color-body);
+            padding: 4px 8px;
             background: var(--color-canvas-soft);
-            padding: 2px 6px;
-            border-radius: var(--radius-sm);
-            color: var(--color-canvas-text-soft, #f5f6f7);
             border: 1px solid var(--color-hairline);
+            border-radius: var(--radius-sm);
+        }
+        .status-dot {
+            width: 6px;
+            height: 6px;
+            background: var(--color-primary);
+            border-radius: 50%;
+            animation: pulse 2s infinite;
+        }
+
+        .intro-card {
+            background: var(--color-canvas-soft);
+            border: 1px solid var(--color-hairline);
+            border-radius: var(--radius-md);
+            padding: var(--spacing-sm) var(--spacing-md);
+            margin-bottom: var(--spacing-sm);
+            font-size: 12px;
+            color: var(--color-body);
+            display: flex;
+            align-items: center;
+        }
+
+        .help-button {
+            background: transparent;
+            color: var(--color-mute);
+            border: none;
+            padding: var(--spacing-xs) var(--spacing-md);
+            border-radius: var(--radius-sm);
+            cursor: pointer;
+            font-size: 13px;
+            font-weight: 500;
+            font-family: Inter, sans-serif;
+            transition: all 0.2s;
+            display: flex;
+            align-items: center;
+            gap: 6px;
+            white-space: nowrap;
+        }
+        .help-button:hover {
+            color: var(--color-primary);
+            background: var(--color-canvas-soft);
+        }
+
+        .modal-overlay {
+            display: none;
+            position: fixed;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background: rgba(0, 0, 0, 0.7);
+            z-index: 1000;
+            align-items: center;
+            justify-content: center;
+            animation: fadeIn 0.2s ease-out;
+        }
+        .modal-overlay.active { display: flex; }
+        @keyframes fadeIn {
+            from { opacity: 0; }
+            to { opacity: 1; }
+        }
+
+        .modal {
+            background: var(--color-canvas);
+            border: 1px solid var(--color-hairline);
+            border-radius: var(--radius-md);
+            max-width: 600px;
+            width: 90%;
+            max-height: 80vh;
+            overflow: hidden;
+            display: flex;
+            flex-direction: column;
+            animation: slideUp 0.3s ease-out;
+        }
+        @keyframes slideUp {
+            from { transform: translateY(20px); opacity: 0; }
+            to { transform: translateY(0); opacity: 1; }
+        }
+
+        .modal-header {
+            padding: var(--spacing-lg) var(--spacing-2xl);
+            border-bottom: 1px solid var(--color-hairline);
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+        .modal-header h2 {
+            margin: 0;
+            font-size: 24px;
+            font-weight: 700;
+            color: var(--color-ink-strong);
+            letter-spacing: -0.6px;
+        }
+        .modal-close {
+            background: transparent;
+            border: none;
+            color: var(--color-mute);
+            font-size: 24px;
+            cursor: pointer;
+            padding: 0;
+            width: 32px;
+            height: 32px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            border-radius: var(--radius-sm);
+            transition: all 0.2s;
+        }
+        .modal-close:hover {
+            background: var(--color-canvas-soft);
+            color: var(--color-ink);
+        }
+
+        .modal-body {
+            padding: var(--spacing-2xl);
+            overflow-y: auto;
+        }
+        .modal-body::-webkit-scrollbar { width: 6px; }
+        .modal-body::-webkit-scrollbar-track { background: var(--color-canvas-soft); border-radius: 3px; }
+        .modal-body::-webkit-scrollbar-thumb { background: var(--color-hairline); border-radius: 3px; }
+        .modal-body::-webkit-scrollbar-thumb:hover { background: var(--color-primary-deep); }
+
+        .command-item {
+            background: var(--color-canvas-soft);
+            border: 1px solid var(--color-hairline);
+            border-radius: var(--radius-md);
+            padding: var(--spacing-lg);
+            margin-bottom: var(--spacing-md);
+        }
+        .command-item:last-child { margin-bottom: 0; }
+        .command-item code {
+            font-family: SFMono-Regular, Menlo, Monaco, Consolas, 'Liberation Mono', 'Courier New', monospace;
+            font-size: 14px;
+            font-weight: 550;
+            background: var(--color-canvas);
+            color: var(--color-primary);
+            padding: 4px 10px;
+            border-radius: var(--radius-sm);
+            border: 1px solid var(--color-hairline);
+            display: inline-block;
+            margin-bottom: var(--spacing-sm);
+        }
+        .command-item p {
+            margin: 0;
+            font-size: 14px;
+            color: var(--color-body);
+            line-height: 1.5;
         }
 
         .chat-container {
-            background: linear-gradient(135deg, rgba(26, 26, 26, 0.8), rgba(16, 16, 16, 0.8));
-            backdrop-filter: blur(10px);
-            -webkit-backdrop-filter: blur(10px);
+            background: var(--color-canvas);
             border: 1px solid var(--color-hairline);
             border-radius: var(--radius-md);
             overflow: hidden;
             display: flex;
             flex-direction: column;
-            height: 500px;
-            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
+            height: calc(100vh - 120px);
+            min-height: 480px;
         }
 
         .chat-messages {
             flex: 1;
             overflow-y: auto;
             padding: var(--spacing-lg);
-            background: var(--color-canvas);
+            background: var(--color-canvas-soft);
             display: flex;
             flex-direction: column;
             gap: var(--spacing-md);
@@ -221,8 +346,6 @@
         }
         .chat-input button:hover {
             background: var(--color-primary-soft);
-            transform: translateY(-1px);
-            box-shadow: 0 4px 8px rgba(0, 217, 146, 0.3);
         }
         .chat-input button:active { transform: translateY(0); }
 
@@ -284,20 +407,68 @@
 
     <div class="container">
         <div class="header">
-            <h1>面试模拟 Agent</h1>
-            <div class="subtitle">Web版 - 智能面试助手</div>
+            <div class="header-left">
+                <h1><i class="fas fa-comment-dots" style="margin-right: 8px; color: var(--color-primary);"></i>面试模拟 Agent</h1>
+                <div class="subtitle">Web版 · 智能面试助手</div>
+            </div>
+            <div class="header-right">
+                <div class="status-indicator">
+                    <div class="status-dot"></div>
+                    <span>在线</span>
+                </div>
+                <button class="help-button" id="helpBtn">
+                    <i class="fas fa-question-circle"></i>
+                    <span>帮助文档</span>
+                </button>
+            </div>
         </div>
 
-        <div class="commands">
-            <h3><i class="fas fa-terminal"></i> 可用命令:</h3>
-            <ul>
-                <li><code>/start</code> - 开始面试流程</li>
-                <li><code>/end</code> - 结束面试</li>
-                <li><code>/resume</code> - 查看简历内容</li>
-                <li><code>/vector 关键词</code> - 查看向量库中相关JD数量</li>
-                <li><code>/history</code> - 查看对话历史</li>
-                <li><code>/clear</code> - 清空对话历史</li>
-            </ul>
+        <div class="intro-card">
+            <div style="display: flex; align-items: center; gap: 12px;">
+                <i class="fas fa-info-circle" style="color: var(--color-primary-soft); font-size: 14px;"></i>
+                <div>
+                    <div style="font-size: 12px; color: var(--color-body); margin: 0; line-height: 1.4;">
+                        这是一个智能面试 Agent，可以帮助你进行模拟面试、简历分析和职业发展咨询。
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div class="modal-overlay" id="helpModal">
+            <div class="modal">
+                <div class="modal-header">
+                    <h2>可用命令</h2>
+                    <button class="modal-close" id="closeModal">
+                        <i class="fas fa-times"></i>
+                    </button>
+                </div>
+                <div class="modal-body">
+                    <div class="command-item">
+                        <code>/start</code>
+                        <p>开始面试流程</p>
+                    </div>
+                    <div class="command-item">
+                        <code>/end</code>
+                        <p>结束面试</p>
+                    </div>
+                    <div class="command-item">
+                        <code>/resume</code>
+                        <p>查看简历内容</p>
+                    </div>
+                    <div class="command-item">
+                        <code>/vector 关键词</code>
+                        <p>查看向量库中相关JD数量</p>
+                    </div>
+                    <div class="command-item">
+                        <code>/history</code>
+                        <p>查看对话历史</p>
+                    </div>
+                    <div class="command-item">
+                        <code>/clear</code>
+                        <p>清空对话历史</p>
+                    </div>
+                </div>
+            </div>
         </div>
 
         <div class="chat-container">
@@ -332,6 +503,9 @@
             var sendBtn = document.getElementById("sendBtn");
             var chatMessages = document.getElementById("chatMessages");
             var statusText = document.getElementById("statusText");
+            var helpBtn = document.getElementById("helpBtn");
+            var helpModal = document.getElementById("helpModal");
+            var closeModal = document.getElementById("closeModal");
 
             // UUID v4 正则，用于检测后端是否已替换占位符
             // 只有当注入值看起来像真实 UUID 时才使用，否则降级
@@ -474,6 +648,18 @@
                 this.style.height = Math.min(this.scrollHeight, 100) + "px";
             });
             sendBtn.addEventListener("click", sendMessage);
+
+            helpBtn.addEventListener("click", function() {
+                helpModal.classList.add("active");
+            });
+            closeModal.addEventListener("click", function() {
+                helpModal.classList.remove("active");
+            });
+            helpModal.addEventListener("click", function(e) {
+                if (e.target === helpModal) {
+                    helpModal.classList.remove("active");
+                }
+            });
 
             checkSession();
         })();
