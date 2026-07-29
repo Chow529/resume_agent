@@ -17,7 +17,7 @@ if str(project_root) not in sys.path:
 
 from fastapi import FastAPI, HTTPException, Request
 from fastapi.staticfiles import StaticFiles
-from fastapi.responses import HTMLResponse, FileResponse
+from fastapi.responses import HTMLResponse, FileResponse, Response
 from langchain_core.messages import HumanMessage, AIMessage
 import asyncio
 
