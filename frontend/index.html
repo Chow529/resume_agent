@@ -37,76 +37,215 @@
             background: var(--color-canvas);
             color: var(--color-ink);
             margin: 0;
-            padding: var(--spacing-lg);
+            padding: 0;
             line-height: 1.65;
+            height: 100vh;
+            overflow: hidden;
         }
 
-        .container { max-width: 960px; margin: 0 auto; }
+        /* 整体两栏布局 */
+        .layout {
+            display: flex;
+            height: 100vh;
+            gap: 1px;
+            background: var(--color-hairline);
+        }
 
-        .header {
+        /* 左侧面板 */
+        .sidebar {
+            width: 340px;
+            min-width: 340px;
+            background: var(--color-canvas);
+            display: flex;
+            flex-direction: column;
+            overflow-y: auto;
+        }
+        .sidebar::-webkit-scrollbar { width: 4px; }
+        .sidebar::-webkit-scrollbar-track { background: transparent; }
+        .sidebar::-webkit-scrollbar-thumb { background: var(--color-hairline); border-radius: 2px; }
+
+        .sidebar-section {
+            padding: var(--spacing-lg) var(--spacing-xl);
+            border-bottom: 1px solid var(--color-hairline);
+        }
+        .sidebar-section:last-child { border-bottom: none; }
+
+        .sidebar-title {
+            font-size: 11px;
+            font-weight: 600;
+            text-transform: uppercase;
+            letter-spacing: 2.52px;
+            color: var(--color-mute);
+            margin: 0 0 var(--spacing-md) 0;
+        }
+
+        /* 品牌区 */
+        .brand-section {
+            padding: var(--spacing-xl);
+            border-bottom: 1px solid var(--color-hairline);
+        }
+        .brand-header {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            margin-bottom: 4px;
+        }
+        .brand-icon {
+            width: 36px;
+            height: 36px;
+            background: var(--color-canvas-soft);
+            border: 1px solid var(--color-hairline);
+            border-radius: var(--radius-md);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 16px;
+            color: var(--color-primary);
+        }
+        .brand-header h1 {
+            margin: 0;
+            font-size: 16px;
+            font-weight: 600;
+            letter-spacing: -0.3px;
+            color: var(--color-ink-strong);
+        }
+        .brand-subtitle {
+            font-size: 12px;
+            color: var(--color-mute);
+            margin: 0;
+            padding-left: 46px;
+        }
+
+        /* 会话状态 */
+        .session-card {
+            background: var(--color-canvas-soft);
+            border: 1px solid var(--color-hairline);
+            border-radius: var(--radius-md);
+            padding: var(--spacing-md);
+        }
+        .session-status {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            font-size: 13px;
+            color: var(--color-body);
+        }
+        .session-status .dot {
+            width: 7px;
+            height: 7px;
+            border-radius: 50%;
+            background: var(--color-primary);
+            flex-shrink: 0;
+        }
+        .session-status .dot.terminated {
+            background: var(--color-mute);
+        }
+        .session-id {
+            font-family: SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+            font-size: 11px;
+            color: var(--color-mute);
+            margin-top: 8px;
+            word-break: break-all;
+        }
+
+        /* 快捷命令 */
+        .quick-actions {
+            display: flex;
+            flex-direction: column;
+            gap: 4px;
+        }
+        .action-item {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            padding: 10px var(--spacing-md);
+            background: var(--color-canvas-soft);
+            border: 1px solid var(--color-hairline);
+            border-radius: var(--radius-md);
+            cursor: pointer;
+            transition: all 0.15s;
+        }
+        .action-item:hover {
+            border-color: var(--color-primary);
+        }
+        .action-item:hover .action-icon {
+            color: var(--color-primary);
+        }
+        .action-left {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+        .action-icon {
+            font-size: 13px;
+            color: var(--color-mute);
+            width: 20px;
+            text-align: center;
+            transition: color 0.15s;
+        }
+        .action-name {
+            font-size: 13px;
+            font-weight: 500;
+            color: var(--color-ink);
+        }
+        .action-desc {
+            font-size: 11px;
+            color: var(--color-mute);
+            margin-top: 2px;
+        }
+        .action-tag {
+            font-family: SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+            font-size: 11px;
+            font-weight: 550;
+            color: var(--color-primary);
+            background: var(--color-canvas);
+            border: 1px solid var(--color-hairline);
+            padding: 2px 6px;
+            border-radius: var(--radius-sm);
+        }
+
+        /* 小贴士 */
+        .tip-item {
+            display: flex;
+            gap: 10px;
+            padding: var(--spacing-sm) 0;
+            font-size: 13px;
+            color: var(--color-body);
+            line-height: 1.5;
+        }
+        .tip-item i {
+            color: var(--color-primary-soft);
+            margin-top: 3px;
+            flex-shrink: 0;
+            font-size: 12px;
+        }
+
+        /* 右侧主区域 */
+        .main {
+            flex: 1;
+            display: flex;
+            flex-direction: column;
+            min-width: 0;
+        }
+
+        /* 顶部栏 */
+        .top-bar {
             display: flex;
             justify-content: space-between;
             align-items: center;
+            padding: var(--spacing-sm) var(--spacing-lg);
+            border-bottom: 1px solid var(--color-hairline);
             background: var(--color-canvas-soft);
-            border: 1px solid var(--color-hairline);
-            border-radius: var(--radius-md);
-            margin-bottom: var(--spacing-sm);
-            padding: var(--spacing-sm) var(--spacing-md);
         }
-        .header-left h1 {
-            margin: 0;
-            font-size: 18px;
-            font-weight: 600;
-            letter-spacing: -0.4px;
-            color: var(--color-ink-strong);
+        .top-bar-left {
             display: flex;
             align-items: center;
             gap: 8px;
+            font-size: 13px;
+            color: var(--color-body);
         }
-        .header-left h1 i {
+        .top-bar-left i {
             color: var(--color-primary);
-        }
-        .header-left .subtitle {
-            margin: 2px 0 0 0;
-            font-size: 11px;
-            color: var(--color-mute);
-        }
-
-        .header-right {
-            display: flex;
-            gap: 8px;
-            align-items: center;
-        }
-
-        .status-indicator {
-            display: flex;
-            align-items: center;
-            gap: 6px;
-            font-size: 11px;
-            color: var(--color-body);
-            padding: 4px 8px;
-            background: var(--color-canvas-soft);
-            border: 1px solid var(--color-hairline);
-            border-radius: var(--radius-sm);
-        }
-        .status-dot {
-            width: 6px;
-            height: 6px;
-            background: var(--color-primary);
-            border-radius: 50%;
-            animation: pulse 2s infinite;
-        }
-
-        .intro-card {
-            background: var(--color-canvas-soft);
-            border: 1px solid var(--color-hairline);
-            border-radius: var(--radius-md);
-            padding: var(--spacing-sm) var(--spacing-md);
-            margin-bottom: var(--spacing-sm);
-            font-size: 12px;
-            color: var(--color-body);
-            display: flex;
-            align-items: center;
         }
 
         .help-button {
@@ -127,16 +266,170 @@
         }
         .help-button:hover {
             color: var(--color-primary);
-            background: var(--color-canvas-soft);
         }
 
+        /* 聊天区域 */
+        .chat-container {
+            flex: 1;
+            display: flex;
+            flex-direction: column;
+            min-height: 0;
+        }
+
+        .chat-messages {
+            flex: 1;
+            overflow-y: auto;
+            padding: var(--spacing-lg);
+            display: flex;
+            flex-direction: column;
+            gap: var(--spacing-md);
+        }
+        .chat-messages::-webkit-scrollbar { width: 4px; }
+        .chat-messages::-webkit-scrollbar-track { background: transparent; }
+        .chat-messages::-webkit-scrollbar-thumb { background: var(--color-hairline); border-radius: 2px; }
+        .chat-messages::-webkit-scrollbar-thumb:hover { background: var(--color-primary-deep); }
+
+        .message {
+            animation: slideIn 0.3s ease-out;
+            display: flex;
+            flex-direction: column;
+            gap: 4px;
+        }
+        @keyframes slideIn {
+            from { opacity: 0; transform: translateY(10px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+        .message.user { align-items: flex-end; }
+        .message.agent { align-items: flex-start; }
+
+        .message-header {
+            font-size: 11px;
+            color: var(--color-mute);
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+            display: flex;
+            align-items: center;
+            gap: 6px;
+        }
+        .message.user .message-header { justify-content: flex-end; }
+        .message.agent .message-header { justify-content: flex-start; }
+
+        .message-content {
+            padding: 12px 16px;
+            border-radius: var(--radius-md);
+            max-width: 70%;
+            word-wrap: break-word;
+            font-size: 14px;
+            line-height: 1.5;
+        }
+
+        .message.user .message-content {
+            background: var(--color-primary);
+            color: var(--color-on-primary);
+            border-bottom-right-radius: var(--radius-sm);
+        }
+
+        .message.agent .message-content {
+            background: var(--color-canvas-soft);
+            border: 1px solid var(--color-hairline);
+            border-bottom-left-radius: var(--radius-sm);
+        }
+
+        .chat-input {
+            padding: var(--spacing-md) var(--spacing-lg);
+            background: var(--color-canvas-soft);
+            border-top: 1px solid var(--color-hairline);
+            display: flex;
+            gap: var(--spacing-sm);
+        }
+        .chat-input textarea {
+            flex: 1;
+            padding: var(--spacing-md) var(--spacing-lg);
+            border: 1px solid var(--color-hairline);
+            border-radius: var(--radius-sm);
+            resize: none;
+            height: 44px;
+            font-size: 14px;
+            font-family: Inter, sans-serif;
+            background: var(--color-canvas);
+            color: var(--color-ink);
+            outline: none;
+        }
+        .chat-input textarea:focus {
+            border-color: var(--color-primary);
+            box-shadow: 0 0 0 2px rgba(0, 217, 146, 0.2);
+        }
+        .chat-input button {
+            background: var(--color-primary);
+            color: var(--color-on-primary);
+            border: none;
+            padding: 0 var(--spacing-lg);
+            border-radius: var(--radius-sm);
+            cursor: pointer;
+            font-size: 14px;
+            font-weight: 600;
+            font-family: Inter, sans-serif;
+            transition: background 0.2s;
+            display: flex;
+            align-items: center;
+            gap: 6px;
+        }
+        .chat-input button:hover {
+            background: var(--color-primary-soft);
+        }
+
+        .status-bar {
+            padding: var(--spacing-xs) var(--spacing-lg);
+            background: var(--color-canvas);
+            font-size: 12px;
+            color: var(--color-mute);
+            display: flex;
+            align-items: center;
+            gap: var(--spacing-xs);
+            border-top: 1px solid var(--color-hairline);
+        }
+        .status-bar .dot {
+            width: 6px;
+            height: 6px;
+            background: var(--color-primary);
+            border-radius: 50%;
+        }
+        @keyframes pulse {
+            0%, 100% { opacity: 1; }
+            50% { opacity: 0.5; }
+        }
+        .status-bar .dot { animation: pulse 2s infinite; }
+
+        .typing {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            padding: 12px 16px;
+            background: var(--color-canvas-soft);
+            border: 1px solid var(--color-hairline);
+            border-radius: var(--radius-md);
+            border-bottom-left-radius: var(--radius-sm);
+            max-width: 70%;
+        }
+        .typing-dot {
+            width: 8px;
+            height: 8px;
+            background: var(--color-mute);
+            border-radius: 50%;
+            animation: typing 1.4s infinite ease-in-out both;
+        }
+        .typing-dot:nth-child(1) { animation-delay: -0.32s; }
+        .typing-dot:nth-child(2) { animation-delay: -0.16s; }
+        @keyframes typing {
+            0%, 80%, 100% { transform: scale(0); }
+            40% { transform: scale(1); }
+        }
+
+        /* 帮助模态框 */
         .modal-overlay {
             display: none;
             position: fixed;
-            top: 0;
-            left: 0;
-            right: 0;
-            bottom: 0;
+            top: 0; left: 0; right: 0; bottom: 0;
             background: rgba(0, 0, 0, 0.7);
             z-index: 1000;
             align-items: center;
@@ -204,10 +497,8 @@
             padding: var(--spacing-2xl);
             overflow-y: auto;
         }
-        .modal-body::-webkit-scrollbar { width: 6px; }
-        .modal-body::-webkit-scrollbar-track { background: var(--color-canvas-soft); border-radius: 3px; }
-        .modal-body::-webkit-scrollbar-thumb { background: var(--color-hairline); border-radius: 3px; }
-        .modal-body::-webkit-scrollbar-thumb:hover { background: var(--color-primary-deep); }
+        .modal-body::-webkit-scrollbar { width: 4px; }
+        .modal-body::-webkit-scrollbar-thumb { background: var(--color-hairline); border-radius: 2px; }
 
         .command-item {
             background: var(--color-canvas-soft);
@@ -218,7 +509,7 @@
         }
         .command-item:last-child { margin-bottom: 0; }
         .command-item code {
-            font-family: SFMono-Regular, Menlo, Monaco, Consolas, 'Liberation Mono', 'Courier New', monospace;
+            font-family: SFMono-Regular, Menlo, Monaco, Consolas, monospace;
             font-size: 14px;
             font-weight: 550;
             background: var(--color-canvas);
@@ -236,260 +527,186 @@
             line-height: 1.5;
         }
 
-        .chat-container {
-            background: var(--color-canvas);
-            border: 1px solid var(--color-hairline);
-            border-radius: var(--radius-md);
-            overflow: hidden;
-            display: flex;
-            flex-direction: column;
-            height: calc(100vh - 120px);
-            min-height: 480px;
+        /* 移动端响应 */
+        @media (max-width: 768px) {
+            .layout { flex-direction: column; }
+            .sidebar {
+                width: 100%;
+                min-width: unset;
+                max-height: 200px;
+                overflow-y: auto;
+            }
         }
-
-        .chat-messages {
-            flex: 1;
-            overflow-y: auto;
-            padding: var(--spacing-lg);
-            background: var(--color-canvas-soft);
-            display: flex;
-            flex-direction: column;
-            gap: var(--spacing-md);
-        }
-
-        .message {
-            margin-bottom: var(--spacing-md);
-            animation: slideIn 0.3s ease-out;
-            display: flex;
-            flex-direction: column;
-            gap: 4px;
-        }
-        @keyframes slideIn {
-            from { opacity: 0; transform: translateY(10px); }
-            to { opacity: 1; transform: translateY(0); }
-        }
-        .message.user { align-items: flex-end; }
-        .message.agent { align-items: flex-start; }
-
-        .message-header {
-            font-size: 11px;
-            color: var(--color-mute);
-            text-transform: uppercase;
-            letter-spacing: 0.5px;
-            display: flex;
-            align-items: center;
-            gap: 6px;
-        }
-        .message.user .message-header { justify-content: flex-end; }
-        .message.agent .message-header { justify-content: flex-start; }
-
-        .message-content {
-            padding: 12px 16px;
-            border-radius: var(--radius-md);
-            max-width: 70%;
-            word-wrap: break-word;
-            font-size: 14px;
-            line-height: 1.5;
-            position: relative;
-        }
-
-        .message.user .message-content {
-            background: var(--color-primary);
-            color: var(--color-on-primary);
-            border-bottom-right-radius: var(--radius-sm);
-        }
-
-        .message.agent .message-content {
-            background: var(--color-canvas-soft);
-            border: 1px solid var(--color-hairline);
-            border-bottom-left-radius: var(--radius-sm);
-        }
-
-        .chat-input {
-            padding: var(--spacing-md) var(--spacing-lg);
-            background: var(--color-canvas-soft);
-            border-top: 1px solid var(--color-hairline);
-            display: flex;
-            gap: var(--spacing-sm);
-        }
-        .chat-input textarea {
-            flex: 1;
-            padding: var(--spacing-md) var(--spacing-lg);
-            border: 1px solid var(--color-hairline);
-            border-radius: var(--radius-sm);
-            resize: none;
-            height: 44px;
-            font-size: 14px;
-            font-family: Inter, sans-serif;
-            background: var(--color-canvas);
-            color: var(--color-ink);
-            outline: none;
-        }
-        .chat-input textarea:focus {
-            border-color: var(--color-primary);
-            box-shadow: 0 0 0 2px rgba(0, 217, 146, 0.2);
-        }
-        .chat-input button {
-            background: var(--color-primary);
-            color: var(--color-on-primary);
-            border: none;
-            padding: 0 var(--spacing-lg);
-            border-radius: var(--radius-sm);
-            cursor: pointer;
-            font-size: 14px;
-            font-weight: 600;
-            font-family: Inter, sans-serif;
-            transition: all 0.2s;
-            display: flex;
-            align-items: center;
-            gap: 6px;
-        }
-        .chat-input button:hover {
-            background: var(--color-primary-soft);
-        }
-        .chat-input button:active { transform: translateY(0); }
-
-        .status-bar {
-            padding: var(--spacing-xs) var(--spacing-lg);
-            background: var(--color-canvas-soft);
-            font-size: 12px;
-            color: var(--color-mute);
-            display: flex;
-            align-items: center;
-            gap: var(--spacing-xs);
-            border-top: 1px solid var(--color-hairline);
-        }
-        .status-dot {
-            width: 8px;
-            height: 8px;
-            background: var(--color-primary);
-            border-radius: 50%;
-            animation: pulse 2s infinite;
-        }
-        @keyframes pulse {
-            0%, 100% { opacity: 1; }
-            50% { opacity: 0.5; }
-        }
-
-        .typing {
-            display: flex;
-            align-items: center;
-            gap: 8px;
-            padding: 12px 16px;
-            background: var(--color-canvas-soft);
-            border: 1px solid var(--color-hairline);
-            border-radius: var(--radius-md);
-            border-bottom-left-radius: var(--radius-sm);
-            max-width: 70%;
-        }
-        .typing-dot {
-            width: 8px;
-            height: 8px;
-            background: var(--color-mute);
-            border-radius: 50%;
-            animation: typing 1.4s infinite ease-in-out both;
-        }
-        .typing-dot:nth-child(1) { animation-delay: -0.32s; }
-        .typing-dot:nth-child(2) { animation-delay: -0.16s; }
-        @keyframes typing {
-            0%, 80%, 100% { transform: scale(0); }
-            40% { transform: scale(1); }
-        }
-
-        .chat-messages::-webkit-scrollbar { width: 6px; }
-        .chat-messages::-webkit-scrollbar-track { background: var(--color-canvas-soft); border-radius: 3px; }
-        .chat-messages::-webkit-scrollbar-thumb { background: var(--color-hairline); border-radius: 3px; }
-        .chat-messages::-webkit-scrollbar-thumb:hover { background: var(--color-primary-deep); }
     </style>
 </head>
 <body>
     <input type="hidden" id="sessionIdInput" value="{SESSION_ID}">
 
-    <div class="container">
-        <div class="header">
-            <div class="header-left">
-                <h1><i class="fas fa-comment-dots" style="margin-right: 8px; color: var(--color-primary);"></i>面试模拟 Agent</h1>
-                <div class="subtitle">Web版 · 智能面试助手</div>
+    <div class="layout">
+        <!-- 左侧面板 -->
+        <aside class="sidebar">
+            <div class="brand-section">
+                <div class="brand-header">
+                    <div class="brand-icon"><i class="fas fa-comment-dots"></i></div>
+                    <h1>面试模拟 Agent</h1>
+                </div>
+                <p class="brand-subtitle">Web版 · 智能面试助手</p>
             </div>
-            <div class="header-right">
-                <div class="status-indicator">
-                    <div class="status-dot"></div>
-                    <span>在线</span>
+
+            <div class="sidebar-section">
+                <div class="session-card">
+                    <div class="session-status">
+                        <span class="dot" id="sessionDot"></span>
+                        <span id="sessionStatusText">Agent 就绪</span>
+                    </div>
+                    <div class="session-id" id="sessionIdDisplay"></div>
+                </div>
+            </div>
+
+            <div class="sidebar-section">
+                <div class="sidebar-title">快捷操作</div>
+                <div class="quick-actions">
+                    <div class="action-item" data-command="/start">
+                        <div class="action-left">
+                            <i class="fas fa-play action-icon"></i>
+                            <div>
+                                <div class="action-name">开始面试</div>
+                                <div class="action-desc">进入面试模拟流程</div>
+                            </div>
+                        </div>
+                        <span class="action-tag">/start</span>
+                    </div>
+                    <div class="action-item" data-command="/resume">
+                        <div class="action-left">
+                            <i class="fas fa-file-alt action-icon"></i>
+                            <div>
+                                <div class="action-name">查看简历</div>
+                                <div class="action-desc">预览当前简历内容</div>
+                            </div>
+                        </div>
+                        <span class="action-tag">/resume</span>
+                    </div>
+                    <div class="action-item" data-command="/history">
+                        <div class="action-left">
+                            <i class="fas fa-clock-rotate-left action-icon"></i>
+                            <div>
+                                <div class="action-name">对话历史</div>
+                                <div class="action-desc">查看之前的对话记录</div>
+                            </div>
+                        </div>
+                        <span class="action-tag">/history</span>
+                    </div>
+                    <div class="action-item" data-command="/end">
+                        <div class="action-left">
+                            <i class="fas fa-stop action-icon"></i>
+                            <div>
+                                <div class="action-name">结束面试</div>
+                                <div class="action-desc">终止当前面试会话</div>
+                            </div>
+                        </div>
+                        <span class="action-tag">/end</span>
+                    </div>
+                    <div class="action-item" data-command="/clear">
+                        <div class="action-left">
+                            <i class="fas fa-trash-can action-icon"></i>
+                            <div>
+                                <div class="action-name">清空历史</div>
+                                <div class="action-desc">清除所有对话记录</div>
+                            </div>
+                        </div>
+                        <span class="action-tag">/clear</span>
+                    </div>
+                </div>
+            </div>
+
+            <div class="sidebar-section">
+                <div class="sidebar-title">小贴士</div>
+                <div class="tip-item">
+                    <i class="fas fa-lightbulb"></i>
+                    <span>使用 <strong style="color: var(--color-primary);">/vector 关键词</strong> 可以搜索向量库中匹配的 JD 数量</span>
+                </div>
+                <div class="tip-item">
+                    <i class="fas fa-lightbulb"></i>
+                    <span>输入 <strong style="color: var(--color-primary);">/start</strong> 后，Agent 会根据简历自动提问</span>
+                </div>
+                <div class="tip-item">
+                    <i class="fas fa-lightbulb"></i>
+                    <span>点击右上角「帮助文档」查看所有可用命令</span>
+                </div>
+            </div>
+        </aside>
+
+        <!-- 右侧主区域 -->
+        <main class="main">
+            <div class="top-bar">
+                <div class="top-bar-left">
+                    <i class="fas fa-robot"></i>
+                    <span>面试 Agent 对话</span>
                 </div>
                 <button class="help-button" id="helpBtn">
                     <i class="fas fa-question-circle"></i>
                     <span>帮助文档</span>
                 </button>
             </div>
-        </div>
 
-        <div class="intro-card">
-            <div style="display: flex; align-items: center; gap: 12px;">
-                <i class="fas fa-info-circle" style="color: var(--color-primary-soft); font-size: 14px;"></i>
-                <div>
-                    <div style="font-size: 12px; color: var(--color-body); margin: 0; line-height: 1.4;">
-                        这是一个智能面试 Agent，可以帮助你进行模拟面试、简历分析和职业发展咨询。
+            <div class="chat-container">
+                <div class="chat-messages" id="chatMessages">
+                    <div class="message agent">
+                        <div class="message-header"><i class="fas fa-robot"></i> Agent</div>
+                        <div class="message-content">开始与面试 Agent 对话吧！<br><span style="font-size: 12px; color: var(--color-mute);">输入 /start 开始面试，或点击左侧快捷操作</span></div>
                     </div>
                 </div>
-            </div>
-        </div>
 
-        <div class="modal-overlay" id="helpModal">
-            <div class="modal">
-                <div class="modal-header">
-                    <h2>可用命令</h2>
-                    <button class="modal-close" id="closeModal">
-                        <i class="fas fa-times"></i>
+                <div class="chat-input">
+                    <textarea id="messageInput" placeholder="输入消息... (Shift+Enter 换行, Enter 发送)"></textarea>
+                    <button id="sendBtn">
+                        <i class="fas fa-paper-plane"></i>
+                        <span>发送</span>
                     </button>
                 </div>
-                <div class="modal-body">
-                    <div class="command-item">
-                        <code>/start</code>
-                        <p>开始面试流程</p>
-                    </div>
-                    <div class="command-item">
-                        <code>/end</code>
-                        <p>结束面试</p>
-                    </div>
-                    <div class="command-item">
-                        <code>/resume</code>
-                        <p>查看简历内容</p>
-                    </div>
-                    <div class="command-item">
-                        <code>/vector 关键词</code>
-                        <p>查看向量库中相关JD数量</p>
-                    </div>
-                    <div class="command-item">
-                        <code>/history</code>
-                        <p>查看对话历史</p>
-                    </div>
-                    <div class="command-item">
-                        <code>/clear</code>
-                        <p>清空对话历史</p>
-                    </div>
+
+                <div class="status-bar">
+                    <span class="dot"></span>
+                    <span id="statusText">Agent 就绪</span>
                 </div>
             </div>
-        </div>
+        </main>
+    </div>
 
-        <div class="chat-container">
-            <div class="chat-messages" id="chatMessages">
-                <div class="message agent">
-                    <div class="message-header"><i class="fas fa-robot"></i> Agent</div>
-                    <div class="message-content">开始与面试 Agent 对话吧！<br><span style="font-size: 12px; color: #6b7280;">输入 /start 开始面试</span></div>
-                </div>
-            </div>
-
-            <div class="chat-input">
-                <textarea id="messageInput" placeholder="输入消息... (Shift+Enter 换行, Enter 发送)"></textarea>
-                <button id="sendBtn">
-                    <i class="fas fa-paper-plane"></i>
-                    <span>发送</span>
+    <!-- 帮助模态框 -->
+    <div class="modal-overlay" id="helpModal">
+        <div class="modal">
+            <div class="modal-header">
+                <h2>可用命令</h2>
+                <button class="modal-close" id="closeModal">
+                    <i class="fas fa-times"></i>
                 </button>
             </div>
-
-            <div class="status-bar">
-                <div class="status-dot"></div>
-                <span id="statusText">Agent 就绪</span>
+            <div class="modal-body">
+                <div class="command-item">
+                    <code>/start</code>
+                    <p>开始面试流程</p>
+                </div>
+                <div class="command-item">
+                    <code>/end</code>
+                    <p>结束面试</p>
+                </div>
+                <div class="command-item">
+                    <code>/resume</code>
+                    <p>查看简历内容</p>
+                </div>
+                <div class="command-item">
+                    <code>/vector 关键词</code>
+                    <p>查看向量库中相关JD数量</p>
+                </div>
+                <div class="command-item">
+                    <code>/history</code>
+                    <p>查看对话历史</p>
+                </div>
+                <div class="command-item">
+                    <code>/clear</code>
+                    <p>清空对话历史</p>
+                </div>
             </div>
         </div>
     </div>
@@ -506,15 +723,14 @@
             var helpBtn = document.getElementById("helpBtn");
             var helpModal = document.getElementById("helpModal");
             var closeModal = document.getElementById("closeModal");
+            var sessionDot = document.getElementById("sessionDot");
+            var sessionIdDisplay = document.getElementById("sessionIdDisplay");
 
-            // UUID v4 正则，用于检测后端是否已替换占位符
-            // 只有当注入值看起来像真实 UUID 时才使用，否则降级
             var UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
             function getSessionId() {
                 var input = document.getElementById("sessionIdInput");
                 var injectedId = input ? input.value : "";
-                // 用正则检测是否被后端替换成了真 UUID
                 if (injectedId && UUID_RE.test(injectedId)) {
                     localStorage.setItem("agentSessionId", injectedId);
                     return injectedId;
@@ -538,6 +754,19 @@
             }
 
             sessionId = getSessionId();
+            sessionIdDisplay.textContent = sessionId;
+
+            function updateSessionStatus(terminated) {
+                if (terminated) {
+                    statusText.textContent = "面试已结束，请输入 /start 开始新的面试";
+                    document.getElementById("sessionStatusText").textContent = "面试已结束";
+                    sessionDot.classList.add("terminated");
+                } else {
+                    statusText.textContent = "Agent 就绪";
+                    document.getElementById("sessionStatusText").textContent = "Agent 就绪";
+                    sessionDot.classList.remove("terminated");
+                }
+            }
 
             function checkSession() {
                 fetch("/api/sessions/" + sessionId + "/status")
@@ -546,11 +775,7 @@
                         throw new Error("Status " + resp.status);
                     })
                     .then(function(data) {
-                        if (data.status === "terminated") {
-                            statusText.textContent = "面试已结束，请输入 /start 开始新的面试";
-                        } else {
-                            statusText.textContent = "Agent 就绪";
-                        }
+                        updateSessionStatus(data.status === "terminated");
                     })
                     .catch(function(err) {
                         console.error("会话检查失败:", err);
@@ -563,9 +788,10 @@
 
                 isTyping = true;
                 statusText.textContent = "Agent 正在思考...";
-                showTypingIndicator();
+                document.getElementById("sessionStatusText").textContent = "思考中...";
 
                 addMessage("user", message);
+                showTypingIndicator();
                 messageInput.value = "";
                 messageInput.style.height = "auto";
 
@@ -578,14 +804,14 @@
                 .then(function(result) {
                     removeTypingIndicator();
                     addMessage("agent", result.message);
-                    statusText.textContent = "Agent 就绪";
+                    updateSessionStatus(false);
                     isTyping = false;
                 })
                 .catch(function(err) {
                     console.error("发送失败:", err);
                     removeTypingIndicator();
                     addMessage("agent", "[错误] 服务器响应失败，请检查网络连接");
-                    statusText.textContent = "Agent 就绪";
+                    updateSessionStatus(false);
                     isTyping = false;
                 });
             }
@@ -601,8 +827,11 @@
                 messageDiv.innerHTML = '<div class="message-header"><i class="' + icon + '"></i>' + header + '</div>'
                     + '<div class="message-content">' + escapedContent + '</div>';
 
-                if (chatMessages.children.length === 1 && chatMessages.querySelector(".message.agent").textContent.indexOf("开始与面试") >= 0) {
-                    chatMessages.innerHTML = "";
+                if (chatMessages.children.length === 1) {
+                    var firstAgentMsg = chatMessages.querySelector(".message.agent");
+                    if (firstAgentMsg && firstAgentMsg.textContent.indexOf("开始与面试") >= 0) {
+                        chatMessages.innerHTML = "";
+                    }
                 }
 
                 chatMessages.appendChild(messageDiv);
@@ -649,6 +878,17 @@
             });
             sendBtn.addEventListener("click", sendMessage);
 
+            // 快捷操作点击 — 直接发送
+            var actionItems = document.querySelectorAll(".action-item");
+            for (var i = 0; i < actionItems.length; i++) {
+                actionItems[i].addEventListener("click", function() {
+                    var cmd = this.getAttribute("data-command");
+                    messageInput.value = cmd;
+                    sendMessage();
+                });
+            }
+
+            // 帮助文档
             helpBtn.addEventListener("click", function() {
                 helpModal.classList.add("active");
             });
