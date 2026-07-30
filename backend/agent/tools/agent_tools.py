@@ -52,8 +52,9 @@ def get_jd_content (key:str) -> str:
     outputContent = SummServer(content,"SUMM_PROMPT").content
     return outputContent
 
-
-
+@tool(description="返回网页操作教程")
+def get_web_tutorial(key:str) -> str:
+    return ""
 # if __name__ == "__main__" :
 #     name = get_job_working()
 #     print(name)
