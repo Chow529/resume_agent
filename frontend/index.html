@@ -246,6 +246,8 @@
                     <div class="action-item disabled" data-command="/resume"><div class="action-left"><i class="fas fa-file-alt action-icon"></i><div><div class="action-name">查看简历</div><div class="action-desc">预览当前简历内容</div></div></div><span class="action-tag">/resume</span></div>
                     <div class="action-item disabled" data-command="/history"><div class="action-left"><i class="fas fa-clock-rotate-left action-icon"></i><div><div class="action-name">对话历史</div><div class="action-desc">查看之前的对话记录</div></div></div><span class="action-tag">/history</span></div>
                     <div class="action-item disabled" data-command="/end"><div class="action-left"><i class="fas fa-stop action-icon"></i><div><div class="action-name">结束面试</div><div class="action-desc">终止当前面试会话</div></div></div><span class="action-tag">/end</span></div>
+                    <div class="action-item disabled" id="uploadResumeBtn"><div class="action-left"><i class="fas fa-upload action-icon"></i><div><div class="action-name">上传简历</div><div class="action-desc">上传 PDF 或 DOCX 文件</div></div></div></div>
+                    <div class="action-item disabled" id="manageResumeBtn"><div class="action-left"><i class="fas fa-list action-icon"></i><div><div class="action-name">管理简历</div><div class="action-desc">查看、删除已上传的简历</div></div></div></div>
                     <div class="action-item disabled" data-command="/clear"><div class="action-left"><i class="fas fa-trash-can action-icon"></i><div><div class="action-name">清空历史</div><div class="action-desc">清除所有对话记录</div></div></div><span class="action-tag">/clear</span></div>
                 </div>
             </div>
@@ -312,6 +314,33 @@
         </div>
     </div>
 
+    <!-- 上传简历模态框 -->
+    <div class="modal-overlay" id="uploadResumeModal" style="display:none;">
+        <div class="modal">
+            <div class="modal-header"><h2>上传简历</h2><button class="modal-close" id="closeUploadModal"><i class="fas fa-times"></i></button></div>
+            <div class="modal-body">
+                <p style="margin-top:0;color:var(--color-body)">支持 PDF 和 DOCX 格式，每个用户最多保存 3 份简历</p>
+                <div class="form-group" style="margin-bottom:16px">
+                    <label class="form-label">选择文件</label>
+                    <input type="file" id="resumeFileInput" accept=".pdf,.docx" style="display:block;width:100%;padding:10px;background:var(--color-canvas-soft);border:1px solid var(--color-hairline);border-radius:var(--radius-sm);color:var(--color-ink);font-size:14px">
+                </div>
+                <div id="uploadStatus" style="color:var(--color-mute);font-size:13px;margin-bottom:10px;min-height:20px"></div>
+                <div class="form-actions"><button class="btn btn-primary" id="startUploadBtn"><i class="fas fa-upload"></i> 上传</button></div>
+                <div class="error-message" id="uploadError"></div>
+            </div>
+        </div>
+    </div>
+    <!-- 管理简历模态框 -->
+    <div class="modal-overlay" id="manageResumeModal" style="display:none;">
+        <div class="modal">
+            <div class="modal-header"><h2>管理简历</h2><button class="modal-close" id="closeManageResumeModal"><i class="fas fa-times"></i></button></div>
+            <div class="modal-body">
+                <div id="resumeListContainer">
+                    <p style="color:var(--color-body)">加载中...</p>
+                </div>
+            </div>
+        </div>
+    </div>
     <script>
         (function() {
             var sessionId = "", userId = "", isTyping = false, isAuthenticated = false;
@@ -451,7 +480,7 @@
 
             function checkSession() { fetch("/api/sessions/" + sessionId + "/status").then(function(resp) { if (resp.ok) return resp.json(); throw new Error("Status " + resp.status); }).then(function(data) { updateSessionStatus(data.status === "terminated"); }).catch(function(err) { console.error("会话检查失败:", err); }); }
 
-            function sendMessage() { if (!isAuthenticated) return; var message = messageInput.value.trim(); if (!message || isTyping) return; isTyping = true; statusText.textContent = "Agent 正在思考..."; document.getElementById("sessionStatusText").textContent = "思考中..."; addMessage("user", message); showTypingIndicator(); messageInput.value = ""; messageInput.style.height = "auto"; fetch("/api/sessions/" + sessionId + "/chat", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ message: message }) }).then(function(resp) { return resp.json(); }).then(function(result) { removeTypingIndicator(); addMessage("agent", result.message); updateSessionStatus(false); isTyping = false; }).catch(function(err) { console.error("发送失败:", err); removeTypingIndicator(); addMessage("agent", "[错误] 服务器响应失败，请检查网络连接"); updateSessionStatus(false); isTyping = false; }); }
+            function sendMessage() { if (!isAuthenticated) return; var message = messageInput.value.trim(); if (!message || isTyping) return; isTyping = true; statusText.textContent = "Agent 正在思考..."; document.getElementById("sessionStatusText").textContent = "思考中..."; addMessage("user", message); showTypingIndicator(); messageInput.value = ""; messageInput.style.height = "auto"; fetch("/api/sessions/" + sessionId + "/chat", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ message: message, user_id: userId }) }).then(function(resp) { return resp.json(); }).then(function(result) { removeTypingIndicator(); addMessage("agent", result.message); updateSessionStatus(false); isTyping = false; }).catch(function(err) { console.error("发送失败:", err); removeTypingIndicator(); addMessage("agent", "[错误] 服务器响应失败，请检查网络连接"); updateSessionStatus(false); isTyping = false; }); }
 
             function addMessage(role, content) { var messageDiv = document.createElement("div"); messageDiv.className = "message " + role; var header = role === "user" ? "你" : "Agent"; var icon = role === "user" ? "fas fa-user" : "fas fa-robot"; var escapedContent = escapeHtml(content); messageDiv.innerHTML = '<div class="message-header"><i class="' + icon + '"></i>' + header + '</div><div class="message-content">' + escapedContent + '</div>'; if (chatMessages.children.length === 1) { var firstAgentMsg = chatMessages.querySelector(".message.agent"); if (firstAgentMsg && firstAgentMsg.textContent.indexOf("开始与面试") >= 0) { chatMessages.innerHTML = ""; } } chatMessages.appendChild(messageDiv); chatMessages.scrollTop = chatMessages.scrollHeight; }
 
@@ -509,6 +538,141 @@ messageInput.addEventListener("keydown", function(e) { if (e.key === "Enter" && 
             registerForm.addEventListener("submit", function(e) { e.preventDefault(); var username = document.getElementById("regUsername").value.trim(), email = document.getElementById("regEmail").value.trim(), password = document.getElementById("regPassword").value; hideError(registerErrorMessage); hideSuccess(registerSuccessMessage); if (password.length < 8) { showError(registerErrorMessage, "密码长度至少为8位"); return; } checkAvailable("username", username, function(available, msg) { if (!available) { showError(registerErrorMessage, msg || "用户名已被占用"); return; } checkAvailable("email", email, function(available, msg) { if (!available) { showError(registerErrorMessage, msg || "该邮箱已被注册"); return; } register(username, email, password, function(data, error) { if (error) { showError(registerErrorMessage, error); } else { showSuccess(registerSuccessMessage); setTimeout(function() { registerSuccessMessage.classList.remove("show"); }, 3000); checkAuthStatus(); closeModalAndReset(registerModal); } }); }); }); });
 
             helpModal.addEventListener("click", function(e) { if (e.target === helpModal) { helpModal.classList.remove("active"); } });
+
+            // ===== 上传简历功能 =====
+            var uploadResumeBtn = document.getElementById("uploadResumeBtn");
+            var manageResumeBtn = document.getElementById("manageResumeBtn");
+            var uploadModal = document.getElementById("uploadResumeModal");
+            var manageModal = document.getElementById("manageResumeModal");
+            var closeUpload = document.getElementById("closeUploadModal");
+            var closeManage = document.getElementById("closeManageResumeModal");
+            var resumeFileInput = document.getElementById("resumeFileInput");
+            var startUploadBtn = document.getElementById("startUploadBtn");
+            var uploadStatus = document.getElementById("uploadStatus");
+            var uploadError = document.getElementById("uploadError");
+            var resumeListContainer = document.getElementById("resumeListContainer");
+
+            // 打开上传模态框
+            var isUploading = false;
+            if (uploadResumeBtn) uploadResumeBtn.addEventListener("click", function() {
+                if (this.classList.contains("disabled")) return;
+                uploadModal.style.display = "flex";
+                resumeFileInput.value = "";
+                uploadStatus.textContent = "";
+                uploadError.classList.remove("show");
+            });
+            if (closeUpload) closeUpload.addEventListener("click", function() { if (!isUploading) uploadModal.style.display = "none"; });
+            if (uploadModal) uploadModal.addEventListener("click", function(e) { if (e.target === this && !isUploading) this.style.display = "none"; });
+
+            // 执行文件上传
+            function uploadFile() {
+                var file = resumeFileInput ? resumeFileInput.files[0] : null;
+                if (!file) { showError(uploadError, "请先选择一个文件"); return; }
+                var ext = file.name.split(".").pop().toLowerCase();
+                if (ext !== "pdf" && ext !== "docx") { showError(uploadError, "仅支持 .pdf 和 .docx 格式"); return; }
+                if (file.size > 10 * 1024 * 1024) { showError(uploadError, "文件大小不能超过 10MB"); return; }
+                hideError(uploadError);
+                isUploading = true;
+                uploadStatus.innerHTML = '<i class="fas fa-spinner fa-spin"></i> 上传中...';
+                startUploadBtn.disabled = true;
+                resumeFileInput.disabled = true;
+                closeUpload.style.opacity = "0.4";
+                closeUpload.style.pointerEvents = "none";
+                var formData = new FormData();
+                formData.append("file", file);
+                fetch("/api/resume/upload?user_id=" + userId + "&session_id=" + sessionId, { method: "PUT", body: formData })
+                    .then(function(resp) { return resp.json(); })
+                    .then(function(data) {
+                        isUploading = false;
+                        startUploadBtn.disabled = false;
+                        resumeFileInput.disabled = false;
+                        closeUpload.style.opacity = "1";
+                        closeUpload.style.pointerEvents = "auto";
+                        if (data.success) {
+                            uploadStatus.innerHTML = '上传成功: ' + data.filename;
+                            uploadModal.style.display = "none";
+                            addMessage("agent", "简历 \"" + data.filename + "\" 上传成功！您可以输入 /start 开始面试了。");
+                        } else { showError(uploadError, data.message || "上传失败"); }
+                    })
+                    .catch(function(err) {
+                        isUploading = false;
+                        startUploadBtn.disabled = false;
+                        resumeFileInput.disabled = false;
+                        closeUpload.style.opacity = "1";
+                        closeUpload.style.pointerEvents = "auto";
+                        uploadStatus.textContent = "";
+                        showError(uploadError, "网络错误，请重试");
+                    });
+            }
+            if (startUploadBtn) startUploadBtn.addEventListener("click", uploadFile);
+
+            // 打开管理简历模态框
+            if (manageResumeBtn) manageResumeBtn.addEventListener("click", function() {
+                if (this.classList.contains("disabled")) return;
+                loadResumeList();
+                manageModal.style.display = "flex";
+            });
+            if (closeManage) closeManage.addEventListener("click", function() { manageModal.style.display = "none"; });
+            if (manageModal) manageModal.addEventListener("click", function(e) { if (e.target === this) this.style.display = "none"; });
+
+            // 加载简历列表
+            function loadResumeList() {
+                if (!resumeListContainer) return;
+                resumeListContainer.innerHTML = "<p style='color:var(--color-body)'>加载中...</p>";
+                fetch("/api/resume/list?user_id=" + userId)
+                    .then(function(resp) { return resp.json(); })
+                    .then(function(data) {
+                        if (data.success && data.count > 0) {
+                            var html = "";
+                            for (var i = 0; i < data.resumes.length; i++) {
+                                var r = data.resumes[i];
+                                var timeStr = r.uploaded_at || "N/A";
+                                var isActive = r.is_active === 1;
+                                var borderStyle = isActive ? "border:2px solid var(--color-primary)" : "border:1px solid var(--color-hairline)";
+                                html += "<div style='background:var(--color-canvas-soft);" + borderStyle + ";border-radius:var(--radius-md);padding:var(--spacing-md);margin-bottom:var(--spacing-md)'>"
+                                    + "<div style='display:flex;align-items:center;justify-content:space-between'>"
+                                    + "<div><div style='font-size:14px;font-weight:500;color:var(--color-ink)'>" + (isActive ? "<span style='color:var(--color-primary);margin-right:6px'>&#9679;</span>" : "<span style='color:var(--color-mute);margin-right:6px'>&#9675;</span>") + r.filename + "</div>"
+                                    + "<div style='font-size:12px;color:var(--color-mute);margin-top:4px'>上传时间: " + timeStr + "</div></div>"
+                                    + "<div style='display:flex;gap:6px'>"
+                                    + (isActive ? "<span style='padding:4px 8px;font-size:11px;border-radius:var(--radius-sm);background:var(--color-primary);color:var(--color-on-primary);border:none'>使用中</span>"
+                                        : "<button class='btn-activate' data-resume-id='" + r.id + "' style='padding:6px 12px;font-size:12px;border:none;border-radius:var(--radius-sm);background:var(--color-primary);color:var(--color-on-primary);cursor:pointer'><i class='fas fa-check'></i> 激活</button>")
+                                    + "<button class='btn btn-danger' data-resume-id='" + r.id + "' style='padding:6px 12px;font-size:12px;border:none;border-radius:var(--radius-sm);background:#e74c3c;color:#fff;cursor:pointer'><i class='fas fa-trash'></i> 删除</button>"
+                                    + "</div></div></div>";
+                            }
+                            resumeListContainer.innerHTML = html;
+                            // 绑定激活事件
+                            var activateBtns = resumeListContainer.querySelectorAll(".btn-activate");
+                            for (var a = 0; a < activateBtns.length; a++) {
+                                activateBtns[a].addEventListener("click", function() {
+                                    var rid = this.getAttribute("data-resume-id");
+                                    fetch("/api/resume/" + rid + "/activate?session_id=" + sessionId, { method: "PUT" })
+                                        .then(function(resp) { return resp.json(); })
+                                        .then(function(data) { if (data.success) loadResumeList(); else alert(data.message || "激活失败"); })
+                                        .catch(function() { alert("网络错误"); });
+                                });
+                            }
+                            // 绑定删除事件
+                            var deleteBtns = resumeListContainer.querySelectorAll(".btn-danger");
+                            for (var j = 0; j < deleteBtns.length; j++) {
+                                deleteBtns[j].addEventListener("click", function() {
+                                    if (confirm("确定要删除这份简历吗？")) {
+                                        var rid = this.getAttribute("data-resume-id");
+                                        fetch("/api/resume/" + rid, { method: "DELETE" })
+                                            .then(function(resp) { return resp.json(); })
+                                            .then(function(data) { if (data.success) loadResumeList(); else alert(data.message || "删除失败"); })
+                                            .catch(function() { alert("网络错误"); });
+                                    }
+                                });
+                            }
+                        } else if (data.success && data.count === 0) {
+                            resumeListContainer.innerHTML = "<p style='color:var(--color-body)'>暂无已上传的简历</p>";
+                        } else {
+                            resumeListContainer.innerHTML = "<p style='color:var(--color-body)'>加载失败</p>";
+                        }
+                    })
+                    .catch(function() { resumeListContainer.innerHTML = "<p style='color:var(--color-body)'>网络错误</p>"; });
+            }
+
             checkSession();
 
             // ===== 用户管理功能 =====
@@ -559,7 +723,7 @@ messageInput.addEventListener("keydown", function(e) { if (e.key === "Enter" && 
                 })
                 .then(function(resp) { return resp.json(); })
                 .then(function(data) {
-                    if (data.success) { alert('邮箱修改成功！'); loadUserInfo(); document.getElementById('newEmail').value = ''; }
+                    if (data.success) { alert('邮箱修改成功！'); window._currentUserData = null; loadUserInfo(); document.getElementById('newEmail').value = ''; }
                     else { showError(emailError, data.message || '修改失败'); }
                 })
                 .catch(function() { showError(emailError, '网络错误'); });

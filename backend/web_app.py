@@ -15,7 +15,7 @@ project_root = Path(__file__).parent.parent  # 从 backend/ 回到项目根目�
 if str(project_root) not in sys.path:
     sys.path.insert(0, str(project_root))
 
-from fastapi import FastAPI, HTTPException, Request
+from fastapi import FastAPI, HTTPException, Request, UploadFile, File, Form
 from fastapi.staticfiles import StaticFiles
 from fastapi.responses import HTMLResponse, FileResponse, Response
 from langchain_core.messages import HumanMessage, AIMessage
@@ -119,6 +119,32 @@ def get_last_ai_message(messages):
         if isinstance(msg, AIMessage):
             return msg
     return None
+
+
+# 定义常用邮箱后缀
+COMMON_EMAIL_SUFFIXES = {
+    'gmail.com', 'yahoo.com', 'outlook.com', 'hotmail.com',
+    'qq.com', '163.com', '126.com', 'sina.com', 'sohu.com',
+    'foxmail.com', 'aliyun.com', 'tom.com', 'yeah.net',
+    'icloud.com', 'me.com', 'protonmail.com', 'proton.me'
+}
+
+def validate_email(email: str) -> bool:
+    # 1. 必须包含 @
+    if '@' not in email :
+        return False
+
+    if email.count('@') != 1:
+        return False
+    
+    # 2. 获取 @ 后面的域名
+    domain = email.split('@')[1].lower()
+    
+    # 3. 检查是否在常用后缀列表中
+    if domain not in COMMON_EMAIL_SUFFIXES:
+        return False
+    
+    return True
 
 @app.get("/favicon.ico")
 async def favicon():
@@ -380,7 +406,7 @@ async def update_user_email(request: Request):
             return {"success": False, "message": "用户ID和邮箱都是必填的"}
 
         # 验证邮箱格式
-        if not (('@' in new_email) and (new_email.endswith('@') or new_email.startswith('@'))):
+        if not (('@' in new_email) ):
             return {"success": False, "message": "邮箱格式无效"}
 
         db = get_user_model()
@@ -458,6 +484,171 @@ async def update_user_password(request: Request):
 
 
 # ─────────────────────────────────────────────────────
+# 简历管理 API（新接口）
+# ─────────────────────────────────────────────────────
+
+
+@app.put("/api/resume/upload")
+async def upload_resume(request: Request):
+    """
+    上传简历文件
+    - 接收 multipart/form-data，字段名 file
+    - 仅允许 .pdf 和 .docx 格式
+    - markitdown 提取纯文本后存入数据库（不保存原始文件）
+    - 每个用户最多 3 份
+    """
+    try:
+        form = await request.form()
+        file_obj = form.get("file")
+        if not file_obj or not hasattr(file_obj, "read"):
+            raise HTTPException(status_code=400, detail="缺少文件参数")
+
+        user_id = request.query_params.get("user_id")
+        if not user_id:
+            raise HTTPException(status_code=400, detail="缺少 user_id 参数")
+
+        # 验证文件名
+        filename = file_obj.filename.lower()
+        if not (filename.endswith(".pdf") or filename.endswith(".docx")):
+            raise HTTPException(status_code=400, detail="仅支持 .pdf 和 .docx 格式")
+
+        # 使用 markitdown 从内存流提取文本（不写临时文件）
+        raw_bytes = await file_obj.read()
+        import io
+        from markitdown import MarkItDown
+        md = MarkItDown()
+        result = md.convert_stream(
+            io.BytesIO(raw_bytes),
+            file_extension=filename.split(".")[-1]
+        )
+        resume_text = result.text_content if result else ""
+
+        if not resume_text or not resume_text.strip():
+            raise HTTPException(status_code=400, detail="无法从文件中提取文本内容")
+
+        # 保存到数据库
+        from sqlClass.resume_model import ResumeModel
+        resume_model = ResumeModel()
+        resume_id = resume_model.create(
+            user_id=int(user_id),
+            filename=filename,
+            resume_text=resume_text
+        )
+
+        if resume_id is None:
+            raise HTTPException(status_code=400, detail="上传失败：已达到简历数量上限（3份）")
+
+        # 更新当前会话的 resume_text（如果提供了 session_id）
+        sess_id = request.query_params.get("session_id")
+        if sess_id and sess_id in _global_sessions:
+            _global_sessions[sess_id]["resume_text"] = resume_text
+
+        return {
+            "success": True,
+            "message": "简历上传成功",
+            "resume_id": resume_id,
+            "filename": filename,
+            "file_type": filename.split(".")[-1]
+        }
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"简历上传错误: {e}", exc_info=True)
+        raise HTTPException(status_code=500, detail=f"服务器内部错误: {str(e)[:200]}")
+
+
+@app.get("/api/resume/list")
+async def list_resumes(request: Request):  # noqa: ARG001
+    """列出用户所有激活的简历"""
+    user_id = request.query_params.get("user_id")
+    if not user_id:
+        raise HTTPException(status_code=400, detail="缺少 user_id 参数")
+
+    try:
+        from sqlClass.resume_model import ResumeModel
+        resume_model = ResumeModel()
+        all_resumes = resume_model.get_all(int(user_id))
+
+        # 只返回激活的
+        active_resumes = [r for r in all_resumes if r.get("is_active", 1) == 1]
+
+        return {
+            "success": True,
+            "count": len(active_resumes),
+            "resumes": [
+                {
+                    "id": r["id"],
+                    "filename": r["filename"],
+                    "uploaded_at": str(r.get("uploaded_at", "")),
+                    "is_active": r.get("is_active", 1)
+                }
+                for r in active_resumes
+            ]
+        }
+    except Exception as e:
+        logger.error(f"获取简历列表错误: {e}")
+        raise HTTPException(status_code=500, detail="服务器内部错误")
+
+
+@app.delete("/api/resume/{resume_id}")
+async def delete_resume(resume_id: int):
+    """删除简历（逻辑删除）"""
+    try:
+        from sqlClass.resume_model import ResumeModel
+        resume_model = ResumeModel()
+
+        resume = resume_model.get_by_id(resume_id)
+        if not resume:
+            raise HTTPException(status_code=404, detail="简历不存在")
+
+        resume_model.deactivate(resume_id)
+
+        return {
+            "success": True,
+            "message": f"简历 '{resume['filename']}' 已删除"
+        }
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"删除简历错误: {e}")
+        raise HTTPException(status_code=500, detail="服务器内部错误")
+
+
+@app.put("/api/resume/{resume_id}/activate")
+async def activate_resume(resume_id: int, request: Request):
+    """
+    激活指定简历（同时取消该用户其他简历的激活状态）
+    """
+    try:
+        from sqlClass.resume_model import ResumeModel
+        resume_model = ResumeModel()
+
+        resume = resume_model.get_by_id(resume_id)
+        if not resume:
+            raise HTTPException(status_code=404, detail="简历不存在")
+
+        user_id = resume["user_id"]
+        # 先取消该用户的所有激活，再激活指定简历
+        resume_model.set_active(user_id, resume_id)
+
+        # 更新当前会话的 resume_text
+        sess_id = request.query_params.get("session_id")
+        if sess_id and sess_id in _global_sessions:
+            _global_sessions[sess_id]["resume_text"] = resume.get("file_path", "")
+
+        return {
+            "success": True,
+            "message": f"已切换为使用 '{resume['filename']}'"
+        }
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"激活简历错误: {e}")
+        raise HTTPException(status_code=500, detail="服务器内部错误")
+
+
+# ─────────────────────────────────────────────────────
 # 主页面路由（保持原有功能）
 # ─────────────────────────────────────────────────────
 @app.get("/", response_class=HTMLResponse)
@@ -495,20 +686,53 @@ async def chat(session_id: str, request: Request):
         raise HTTPException(status_code=400, detail="消息内容不能为空")
 
     session = _global_sessions[session_id]
+    # 将 user_id 绑定到会话（前端每次发消息时带上）
+    uid = data.get("user_id")
+    if uid:
+        session["user_id"] = int(uid)
 
     # 处理特殊命令
     if user_message == "/start":
         try:
-            user_resum = load_pdf()
-            if not user_resum:
-                return {
-                    "session_id": session_id,
-                    "message": "[错误] 未找到简历文件，请先将简历放入 job/jobhunter.pdf",
-                    "role": "error"
-                }
+            # 从会话中获取已上传的简历文本
+            session = _global_sessions[session_id]
+            resume_text = session.get("resume_text", "")
 
+            # 如果 session 中没有缓存，从数据库读取激活简历
+            if not resume_text.strip():
+                uid = session.get("user_id")
+                if uid:
+                    from sqlClass.resume_model import ResumeModel
+                    resume_model = ResumeModel()
+                    active_resume = resume_model.get_active(uid)
+                    if active_resume:
+                        resume_text = active_resume.get("file_path", "")
+                        session["resume_text"] = resume_text
+
+            # 如果还没找到，尝试读默认 PDF（向后兼容）
+            if not resume_text.strip():
+                from utils.readyml_tool import load_pdf
+                user_resum = load_pdf()
+                if not user_resum:
+                    return {
+                        "session_id": session_id,
+                        "message": "[错误] 未找到简历文件，请先上传简历",
+                        "role": "error"
+                    }
+                resume_text = "\n".join([doc.page_content for doc in user_resum])
+
+            # 清理旧对话历史
             chat_history = session["chat_history"]
             chat_history.clear()
+
+            # 设置线程上下文，让 get_job_working 能读取到简历信息
+            from utils.session_context import set_current_session
+            set_current_session(
+                session_id=session_id,
+                resume_text=resume_text
+            )
+
+            # 让 Agent 主导面试流程
             chat_history.append(HumanMessage(content="开始面试，请先获取我的简历信息"))
 
             agent = get_agent()
@@ -573,19 +797,39 @@ async def chat(session_id: str, request: Request):
         }
 
     elif user_message == "/resume":
-        user_resum = load_pdf()
-        if user_resum:
-            content = "\n".join([doc.page_content for doc in user_resum])
+        session = _global_sessions[session_id]
+        resume_text = session.get("resume_text", "")
+
+        # 如果 session 中没有缓存，从数据库读取该用户激活的简历
+        if not resume_text.strip():
+            user_id = session.get("user_id")
+            if user_id:
+                from sqlClass.resume_model import ResumeModel
+                resume_model = ResumeModel()
+                active_resume = resume_model.get_active(user_id)
+                if active_resume:
+                    resume_text = active_resume.get("file_path", "")
+                    # 写回 session 缓存
+                    session["resume_text"] = resume_text
+
+        # 如果还没有，尝试读默认 PDF（向后兼容）
+        if not resume_text.strip():
+            from utils.readyml_tool import load_pdf
+            user_resum = load_pdf()
+            if user_resum:
+                resume_text = "\n".join([doc.page_content for doc in user_resum])
+
+        if resume_text:
             return {
                 "session_id": session_id,
-                "message": f"\n[简历内容]\n{content}",
+                "message": f"\n[简历内容]\n{resume_text}",
                 "role": "agent",
                 "type": "resume"
             }
         else:
             return {
                 "session_id": session_id,
-                "message": "[提示] 未找到简历文件,请上传简历文件",
+                "message": "[提示] 未找到简历文件，请上传简历文件",
                 "role": "agent",
                 "type": "resume_not_found"
             }
@@ -654,15 +898,3 @@ async def get_session_status(session_id: str):
     return {"session_id": session_id, "status": _global_sessions[session_id]["status"]}
 
 
-@app.delete("/api/sessions/{session_id}")
-async def delete_session(session_id: str):
-    """删除会话"""
-    if session_id in _global_sessions:
-        del _global_sessions[session_id]
-    return {"status": "ok", "session_id": session_id}
-
-
-@app.get("/health")
-async def health():
-    """健康检查"""
-    return {"status": "healthy", "timestamp": int(time.time())}
