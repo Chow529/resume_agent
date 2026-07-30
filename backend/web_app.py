@@ -21,6 +21,18 @@ from fastapi.responses import HTMLResponse, FileResponse, Response
 from langchain_core.messages import HumanMessage, AIMessage
 import asyncio
 
+# Pydantic模型用于数据验证
+from pydantic import BaseModel
+
+class UserCredentials(BaseModel):
+    username: str
+    password: str
+
+class UserRegister(BaseModel):
+    username: str
+    email: str
+    password: str
+
 # 导入（所有模块都在项目根目录下）
 from rag.ChromaServer import ChromaServer
 from agent.tools import agent_tools
@@ -120,9 +132,336 @@ async def favicon():
 # ─────────────────────────────────────────────────────
 # API 路由
 # ─────────────────────────────────────────────────────
+
+# ─────────────────────────────────────────────────────
+# 用户认证相关接口
+# ─────────────────────────────────────────────────────
+
+# 导入用户模型（使用正确的导入路径，因为项目根目录已在sys.path中）
+# 注意：实际导入在 get_user_model() 函数内部进行，以避免循环导入问题
+import hashlib
+import secrets
+from fastapi import Form, HTTPException
+
+# 创建全局用户模型实例（使用默认的数据库连接）
+user_model = None
+
+def get_user_model():
+    """获取或创建用户模型实例"""
+    global user_model
+    if user_model is None:
+        # 在函数内部导入，避免路径问题
+        from sqlClass.mysql_connector import UserModel
+        user_model = UserModel()
+    return user_model
+
+
+def hash_password(password: str, salt: str) -> str:
+    """
+    使用SHA-256+盐值进行密码哈希
+    实际生产环境建议使用bcrypt或PBKDF2
+    """
+    return hashlib.sha256((password + salt).encode('utf-8')).hexdigest()
+
+
+@app.post("/api/auth/login")
+async def login(request: Request):
+    """
+    用户登录接口
+    - 验证用户名和密码
+    - 验证账户是否被锁定或禁用
+    - 记录登录尝试次数
+    - 登录成功后返回用户ID
+    """
+    try:
+        # 解析JSON请求体
+        data = await request.json()
+        username = data.get('username')
+        password = data.get('password')
+
+        if not username or not password:
+            return {"success": False, "message": "用户名和密码不能为空", "userId": None}
+
+        model_db = get_user_model()
+
+        # 1. 从数据库中查询用户
+        user = model_db.get_user_by_username(username)
+        if not user:
+            return {"success": False, "message": "用户名或密码错误", "userId": None}
+
+        # 2. 检查账户状态
+        if user.get('is_active', 0) == 0:
+            return {"success": False, "message": "账户已被禁用", "userId": None}
+        if user.get('is_locked', 0) == 1:
+            return {"success": False, "message": "账户已被锁定，请联系管理员", "userId": None}
+
+        # 3. 验证密码（对比密码哈希）
+        salt = user.get('salt', '')
+        if not salt:
+            return {"success": False, "message": "用户数据不完整", "userId": None}
+
+        expected_hash = user.get('password_hash', '')
+        actual_hash = hash_password(password, salt)
+
+        if actual_hash != expected_hash:
+            # 密码错误，更新失败尝试次数
+            failed_attempts = user.get('failed_login_attempts', 0) + 1
+            last_failed = time.strftime('%Y-%m-%d %H:%M:%S', time.localtime())
+
+            # 如果尝试次数超过5次，锁定账户
+            if failed_attempts >= 5:
+                model_db.update(user['id'], {'failed_login_attempts': failed_attempts, 'last_failed_login_at': last_failed, 'is_locked': 1})
+                return {"success": False, "message": "账号已因多次失败登录被锁定，请联系管理员", "userId": None}
+
+            model_db.update(user['id'], {'failed_login_attempts': failed_attempts, 'last_failed_login_at': last_failed})
+            return {"success": False, "message": "用户名或密码错误", "userId": None}
+
+        # 4. 登录成功，重置失败尝试次数，更新最后登录时间
+        model_db.update(user['id'], {
+            'failed_login_attempts': 0,
+            'last_failed_login_at': None,
+            'is_locked': 0,
+            'last_login_at': time.strftime('%Y-%m-%d %H:%M:%S', time.localtime())
+        })
+
+        # 5. 返回用户ID
+        return {"success": True, "message": "登录成功", "userId": user['id']}
+
+    except Exception as e:
+        logger.error(f"登录错误: {e}")
+        return {"success": False, "message": "服务器内部错误", "userId": None}
+
+
+@app.post("/api/auth/register")
+async def register(request: Request):
+    """
+    用户注册接口
+    - 检查用户名和邮箱是否已存在
+    - 生成盐值（salt）和密码哈希（password_hash）
+    - 创建新用户记录
+    - 注册成功后自动登录
+    """
+    print("注册请求处理中...")
+    try:
+        # 解析JSON请求体
+        data = await request.json()
+        username = data.get('username')
+        email = data.get('email')
+        password = data.get('password')
+
+        if not username or not email or not password:
+            return {"success": False, "message": "所有字段都是必填的", "userId": None}
+
+        # 验证输入长度
+        if len(username) < 5 or len(username) > 50:
+            return {"success": False, "message": "用户名长度必须在5-50个字符之间", "userId": None}
+
+        if len(password) < 8:
+            return {"success": False, "message": "密码长度至少为8位", "userId": None}
+
+        model_db = get_user_model()
+
+        # 1. 检查用户名是否已存在
+        if model_db.get_user_by_username(username):
+            return {"success": False, "message": "用户名已被占用", "userId": None}
+
+        # 2. 检查邮箱是否已存在
+        if model_db.get_user_by_email(email):
+            return {"success": False, "message": "该邮箱已被注册", "userId": None}
+
+        # 3. 生成随机盐值
+        salt = secrets.token_hex(32)  # 64字符的十六进制字符串
+
+        # 4. 使用PBKDF2-like方式对密码进行哈希处理
+        password_hash = hash_password(password, salt)
+
+        # 5. 插入新用户记录
+        user_id = model_db.create_user(username, email, password_hash, salt)
+        if user_id is None:
+            return {"success": False, "message": "注册失败，请重试", "userId": None}
+
+        # 6. 返回userId（登录状态）
+        return {"success": True, "message": "注册成功", "userId": user_id}
+
+    except Exception as e:
+        logger.error(f"注册错误: {e}")
+        return {"success": False, "message": "服务器内部错误", "userId": None}
+
+
+@app.get("/api/auth/check")
+async def check_user_available(field: str = None, value: str = None):
+    """
+    检查用户名或邮箱是否可用
+    - 字段（field）可以是"username"或"email"
+    - 返回可用状态和消息
+    """
+    if not field or not value:
+        return {"available": False, "message": "缺少参数"}
+
+    # 验证field参数
+    if field not in ['username', 'email']:
+        return {"available": False, "message": "无效的字段名，只能是username或email"}
+
+    try:
+        model_db = get_user_model()
+
+        # 从数据库中检查该字段对应的值是否已存在
+        if field == 'username':
+            user = model_db.get_user_by_username(value)
+        else:  # email
+            user = model_db.get_user_by_email(value)
+
+        if user:
+            # 返回更具体的消息，便于前端展示
+            if field == 'username':
+                return {"available": False, "message": "用户名已被占用"}
+            else:  # email
+                return {"available": False, "message": "该邮箱已被注册"}
+        else:
+            return {"available": True, "message": f"{field}可用"}
+
+    except Exception as e:
+        logger.error(f"检查可用性问题: {e}")
+        return {"available": False, "message": "系统繁忙，请稍后重试"}
+
+
+@app.post("/api/auth/logout")
+async def logout(request: Request):
+    """
+    用户登出接口
+    - 清除用户的session状态
+    - 可以在token黑名单中记录
+    """
+    # TODO: 实际生产环境中这里应该清理服务端会话状态
+    # 例如：将JWT加入黑名单，或清除Redis中的session数据
+    return {"success": True, "message": "已登出"}
+
+
+@app.get("/api/auth/me")
+async def get_current_user(user_id: str = None):
+    """
+    获取当前登录用户信息
+    - 返回用户的用户名、邮箱等基本信息
+    """
+    if not user_id:
+        return {"userId": None, "username": "", "email": "", "createdAt": ""}
+
+    try:
+        model_db = get_user_model()
+        # 根据用户ID获取用户信息
+        user = model_db.get(int(user_id))
+        if not user:
+            return {"userId": user_id, "username": "", "email": "", "createdAt": ""}
+
+        return {
+            "userId": str(user['id']),
+            "username": user['username'],
+            "email": user['email'],
+            "createdAt": user.get('created_at', '')
+        }
+    except Exception as e:
+        logger.error(f"获取用户信息错误: {e}")
+        return {"userId": user_id, "username": "", "email": "", "createdAt": ""}
+
+
+@app.put("/api/auth/user/email")
+async def update_user_email(request: Request):
+    """
+    修改用户邮箱
+    - 需要用户ID和新邮箱
+    - 检查新邮箱是否已被其他用户使用
+    """
+    try:
+        data = await request.json()
+        user_id = data.get('user_id')
+        new_email = data.get('email')
+
+        if not user_id or not new_email:
+            return {"success": False, "message": "用户ID和邮箱都是必填的"}
+
+        # 验证邮箱格式
+        if not (('@' in new_email) and (new_email.endswith('@') or new_email.startswith('@'))):
+            return {"success": False, "message": "邮箱格式无效"}
+
+        db = get_user_model()
+
+        # 检查新邮箱是否已被占用（排除当前用户）
+        user = db.get(int(user_id))
+        if not user:
+            return {"success": False, "message": "用户不存在"}
+
+        existing_users = db.get_all_by('email', new_email)
+        if existing_users and existing_users[0]['id'] != int(user_id):
+            return {"success": False, "message": "该邮箱已被注册"}
+
+        # 更新邮箱
+        db.update(int(user_id), {'email': new_email})
+        return {"success": True, "message": "邮箱修改成功"}
+
+    except Exception as e:
+        logger.error(f"修改邮箱错误: {e}")
+        return {"success": False, "message": "服务器内部错误"}
+
+
+@app.put("/api/auth/user/password")
+async def update_user_password(request: Request):
+    """
+    修改用户密码
+    - 需要用户ID、旧密码和新密码
+    - 验证旧密码正确性
+    """
+    try:
+        data = await request.json()
+        user_id = data.get('user_id')
+        old_password = data.get('old_password')
+        new_password = data.get('new_password')
+
+        if not user_id or not old_password or not new_password:
+            return {"success": False, "message": "所有字段都是必填的"}
+
+        if len(new_password) < 8:
+            return {"success": False, "message": "新密码长度至少为8位"}
+
+        db = get_user_model()
+
+        # 获取用户信息
+        user = db.get(int(user_id))
+        if not user:
+            return {"success": False, "message": "用户不存在"}
+
+        # 验证旧密码
+        salt = user.get('salt', '')
+        if not salt:
+            return {"success": False, "message": "用户数据不完整"}
+
+        expected_hash = user.get('password_hash', '')
+        actual_hash = hash_password(old_password, salt)
+
+        if actual_hash != expected_hash:
+            return {"success": False, "message": "旧密码错误"}
+
+        # 生成新盐值和密码哈希
+        new_salt = secrets.token_hex(32)
+        new_password_hash = hash_password(new_password, new_salt)
+
+        # 更新密码
+        db.update(int(user_id), {
+            'password_hash': new_password_hash,
+            'salt': new_salt
+        })
+
+        return {"success": True, "message": "密码修改成功"}
+
+    except Exception as e:
+        logger.error(f"修改密码错误: {e}")
+        return {"success": False, "message": "服务器内部错误"}
+
+
+# ─────────────────────────────────────────────────────
+# 主页面路由（保持原有功能）
+# ─────────────────────────────────────────────────────
 @app.get("/", response_class=HTMLResponse)
 async def index():
-    """主页面 - 面试模拟器"""
     session_id = str(uuid.uuid4())
     init_session(session_id)
     html_path = project_root / "frontend" / "index.html"
@@ -246,7 +585,7 @@ async def chat(session_id: str, request: Request):
         else:
             return {
                 "session_id": session_id,
-                "message": "[提示] 未找到简历文件 job/jobhunter.pdf",
+                "message": "[提示] 未找到简历文件,请上传简历文件",
                 "role": "agent",
                 "type": "resume_not_found"
             }

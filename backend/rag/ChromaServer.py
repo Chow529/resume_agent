@@ -26,14 +26,14 @@ RAGPATH = get_abs_path("rag_knowladge")
 向量库存储,获取,读取
 """
 class ChromaServer:
-    def __init__(self) -> None:
+    def __init__(self,chromaType :str = "job_jd") -> None:
         path = RAGPATH
         # 确保目录存在
         if not os.path.exists(path):
             os.makedirs(path)
 
         self.chroma = Chroma(
-            collection_name="job_jd",
+            collection_name=chromaType,
             embedding_function=EmbeddingModelIni().InitModel(),
             persist_directory=path
         )
