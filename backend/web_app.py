@@ -772,6 +772,21 @@ async def init_session_endpoint(session_id: str):
     return {"session_id": session_id, "status": "initialized"}
 
 
+@app.put("/api/sessions/{session_id}/user")
+async def bind_session_user(session_id: str, request: Request):
+    """
+    将 user_id 绑定到会话，使 /start 和 /resume 能读取该用户的简历
+    """
+    data = await request.json()
+    uid = data.get("user_id")
+    if not uid:
+        raise HTTPException(status_code=400, detail="缺少 user_id")
+    if session_id not in _global_sessions:
+        raise HTTPException(status_code=404, detail="会话不存在")
+    _global_sessions[session_id]["user_id"] = int(uid)
+    return {"success": True}
+
+
 @app.post("/api/sessions/{session_id}/chat")
 async def chat(session_id: str, request: Request):
     """对话接口 - 用户发送消息，Agent回复"""
@@ -786,7 +801,7 @@ async def chat(session_id: str, request: Request):
 
     data = await request.json()
     user_message = data.get("message", "").strip()
-    print(user_message)
+    # print(user_message)
 
     # 保存用户消息到数据库（无论是否特殊命令）
     save_message_to_db(session_id, "user", user_message)

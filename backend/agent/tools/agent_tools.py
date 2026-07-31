@@ -36,7 +36,7 @@ def get_job_working(user_id: str = None) -> str:
         # print(f"简历内容: {resume_content}")
         # 通过 JobServies 获取岗位信息
         contentStr = JobServies.get_job(resume_text=resume_content)
-        print(f"岗位信息: {contentStr}")
+        # print(f"岗位信息: {contentStr}")
         strList = contentStr.split(',')
         city = strList[-1]
         listKwargs = strList[:-1]
@@ -46,7 +46,7 @@ def get_job_working(user_id: str = None) -> str:
         except Exception as e:
             print(f"[警告] 智联招聘爬取失败: {e}, 继续执行后续流程")
             result = {"jobs": []}
-        print(result)
+        # print(result)
         content = SummServer(result["jobs"], "CHROMA_PROMPT").content
         listSumm :list[str] = content.split('\n')
         

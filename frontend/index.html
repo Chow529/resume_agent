@@ -161,6 +161,16 @@
             background: var(--color-mute);
         }
 
+        .session-status .dot.interviewing {
+            background: #f59e0b;
+            animation: pulse 1.5s infinite;
+        }
+
+        @keyframes pulse {
+            0%, 100% { opacity: 1; box-shadow: 0 0 0 0 rgba(245, 158, 11, 0.4); }
+            50% { opacity: 0.8; box-shadow: 0 0 0 4px rgba(245, 158, 11, 0); }
+        }
+
         .session-id {
             font-family: SFMono-Regular, Menlo, Monaco, Consolas, monospace;
             font-size: 11px;
@@ -478,22 +488,17 @@
             height: 6px;
             background: var(--color-primary);
             border-radius: 50%;
+            transition: background 0.3s;
         }
-
-        @keyframes pulse {
-
-            0%,
-            100% {
-                opacity: 1;
-            }
-
-            50% {
-                opacity: 0.5;
-            }
+        .status-bar .dot.idle {
+            background: var(--color-mute);
         }
-
-        .status-bar .dot {
-            animation: pulse 2s infinite;
+        .status-bar .dot.interviewing {
+            background: #f59e0b;
+            animation: pulse 1.5s infinite;
+        }
+        .status-bar .dot.terminated {
+            background: var(--color-mute);
         }
 
         .typing {
@@ -1244,14 +1249,36 @@
                 });
             }
 
-            function updateSessionStatus(terminated) {
-                if (terminated) { statusText.textContent = "面试已结束，请输入 /start 开始新的面试"; document.getElementById("sessionStatusText").textContent = "面试已结束"; sessionDot.classList.add("terminated"); }
-                else { statusText.textContent = isAuthenticated ? "Agent 就绪" : "Agent 就绪"; document.getElementById("sessionStatusText").textContent = isAuthenticated ? "Agent 就绪" : "Agent 就绪"; sessionDot.classList.remove("terminated"); }
+            function updateSessionStatus(status) {
+                var statusText = document.getElementById("sessionStatusText");
+                var dot = sessionDot;
+                var statusBarDot = document.querySelector(".status-bar .dot");
+                if (status === "terminated") {
+                    updateStatus("面试已结束，请输入 /start 开始新的面试");
+                    statusText.textContent = "面试已结束";
+                    dot.classList.remove("interviewing");
+                    dot.classList.add("terminated");
+                    if (statusBarDot) { statusBarDot.className = "dot terminated"; }
+                } else if (status === "interviewing") {
+                    updateStatus("面试进行中…");
+                    statusText.textContent = "面试进行中";
+                    dot.classList.remove("terminated");
+                    dot.classList.add("interviewing");
+                    if (statusBarDot) { statusBarDot.className = "dot interviewing"; }
+                    // 面试开始，清空欢迎消息
+                    var welcome = document.getElementById("welcomeMessage");
+                    if (welcome) welcome.remove();
+                } else {
+                    updateStatus(isAuthenticated ? "Agent 就绪" : "Agent 就绪");
+                    statusText.textContent = isAuthenticated ? "Agent 就绪" : "Agent 就绪";
+                    dot.classList.remove("terminated", "interviewing");
+                    if (statusBarDot) { statusBarDot.className = "dot idle"; }
+                }
             }
 
-            function checkSession() { fetch("/api/sessions/" + sessionId + "/status").then(function (resp) { if (resp.ok) return resp.json(); throw new Error("Status " + resp.status); }).then(function (data) { updateSessionStatus(data.status === "terminated"); }).catch(function (err) { console.error("会话检查失败:", err); }); }
+            function checkSession() { fetch("/api/sessions/" + sessionId + "/status").then(function (resp) { if (resp.ok) return resp.json(); throw new Error("Status " + resp.status); }).then(function (data) { if (data.status === "interviewing") { updateSessionStatus("interviewing"); } else { updateSessionStatus(data.status === "terminated" ? "terminated" : "idle"); } }).catch(function (err) { console.error("会话检查失败:", err); }); }
 
-            function sendMessage() { if (!isAuthenticated) return; var message = messageInput.value.trim(); if (!message || isTyping) return; isTyping = true; statusText.textContent = "Agent 正在思考..."; document.getElementById("sessionStatusText").textContent = "思考中..."; addMessage("user", message); showTypingIndicator(); messageInput.value = ""; messageInput.style.height = "auto"; fetch("/api/sessions/" + sessionId + "/chat", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ message: message, user_id: userId }) }).then(function (resp) { return resp.json(); }).then(function (result) { removeTypingIndicator(); addMessage("agent", result.message); updateSessionStatus(false); isTyping = false; }).catch(function (err) { console.error("发送失败:", err); removeTypingIndicator(); addMessage("agent", "[错误] 服务器响应失败，请检查网络连接"); updateSessionStatus(false); isTyping = false; }); }
+            function sendMessage() { if (!isAuthenticated) return; var message = messageInput.value.trim(); if (!message || isTyping) return; isTyping = true; statusText.textContent = "Agent 正在思考..."; document.getElementById("sessionStatusText").textContent = "思考中..."; addMessage("user", message); showTypingIndicator(); messageInput.value = ""; messageInput.style.height = "auto"; fetch("/api/sessions/" + sessionId + "/chat", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ message: message, user_id: userId }) }).then(function (resp) { return resp.json(); }).then(function (result) { removeTypingIndicator(); addMessage("agent", result.message); if (result.type === "interview_start") { updateSessionStatus("interviewing"); } else if (result.type === "interview_end") { updateSessionStatus("terminated"); } else { updateSessionStatus("idle"); } isTyping = false; }).catch(function (err) { console.error("发送失败:", err); removeTypingIndicator(); addMessage("agent", "[错误] 服务器响应失败，请检查网络连接"); updateSessionStatus("idle"); isTyping = false; }); }
 
             function addMessage(role, content) { var messageDiv = document.createElement("div"); messageDiv.className = "message " + role; var header = role === "user" ? "你" : "Agent"; var icon = role === "user" ? "fas fa-user" : "fas fa-robot"; var escapedContent = escapeHtml(content); messageDiv.innerHTML = '<div class="message-header"><i class="' + icon + '"></i>' + header + '</div><div class="message-content">' + escapedContent + '</div>'; if (chatMessages.children.length === 1) { var firstAgentMsg = chatMessages.querySelector(".message.agent"); if (firstAgentMsg && firstAgentMsg.textContent.indexOf("开始与面试") >= 0) { chatMessages.innerHTML = ""; } } chatMessages.appendChild(messageDiv); chatMessages.scrollTop = chatMessages.scrollHeight; }
 
