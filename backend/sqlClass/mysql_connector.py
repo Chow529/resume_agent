@@ -330,63 +330,63 @@ class UserModel(BaseModel):
 
 # ========== 模型类：简历表操作 ==========
 
-class ResumeModel(BaseModel):
-    """简历模型类，管理 user_resumes 表"""
+# class ResumeModel(BaseModel):
+#     """简历模型类，管理 user_resumes 表"""
 
-    def __init__(self):
-        super().__init__('user_resumes')
+#     def __init__(self):
+#         super().__init__('user_resumes')
 
-    def create(self, user_id: int, filename: str, file_path: str, file_type: str) -> Optional[int]:
-        """创建新的简历记录"""
-        # 检查用户是否已达到3份简历限制
-        if self.count(user_id) >= 3:
-            print("✗ 简历数量已达到上限（3份）")
-            return None
+#     def create(self, user_id: int, filename: str, file_path: str, file_type: str) -> Optional[int]:
+#         """创建新的简历记录"""
+#         # 检查用户是否已达到3份简历限制
+#         if self.count(user_id) >= 3:
+#             print("✗ 简历数量已达到上限（3份）")
+#             return None
 
-        data = {
-            'user_id': user_id,
-            'filename': filename,
-            'file_path': file_path,
-            'file_type': file_type,
-            'is_active': 1,  # 新上传的默认为激活状态
-            'version_order': int(time.time())
-        }
-        return self.create(data)
+#         data = {
+#             'user_id': user_id,
+#             'filename': filename,
+#             'file_path': file_path,
+#             'file_type': file_type,
+#             'is_active': 1,  # 新上传的默认为激活状态
+#             'version_order': int(time.time())
+#         }
+#         return self.create(data)
 
-    def count(self, user_id: int) -> int:
-        """获取用户简历数量"""
-        return self.count(where_field='user_id', where_value=user_id)
+#     def count(self, user_id: int) -> int:
+#         """获取用户简历数量"""
+#         return self.count(where_field='user_id', where_value=user_id)
 
-    def get_active(self, user_id: int) -> Optional[Dict[str, Any]]:
-        """获取用户当前激活的简历"""
-        # 查找 is_active=1 的简历
-        results = self.db.execute_query(
-            f"SELECT * FROM `{self.table_name}` WHERE user_id = %s AND is_active = 1",
-            (user_id,)
-        )
-        return results[0] if results else None
+#     def get_active(self, user_id: int) -> Optional[Dict[str, Any]]:
+#         """获取用户当前激活的简历"""
+#         # 查找 is_active=1 的简历
+#         results = self.db.execute_query(
+#             f"SELECT * FROM `{self.table_name}` WHERE user_id = %s AND is_active = 1",
+#             (user_id,)
+#         )
+#         return results[0] if results else None
 
-    def get_all(self, user_id: int) -> List[Dict[str, Any]]:
-        """获取用户所有简历记录"""
-        return self.get_all_by('user_id', user_id)
+#     def get_all(self, user_id: int) -> List[Dict[str, Any]]:
+#         """获取用户所有简历记录"""
+#         return self.get_all_by('user_id', user_id)
 
-    def set_active(self, user_id: int, resume_id: int) -> bool:
-        """激活指定简历（同时取消其他激活状态）"""
-        # 先取消该用户的所有激活状态
-        self.update_user_resumes(user_id, {'is_active': 0})
-        # 激活指定简历
-        return self.update(resume_id, {'is_active': 1}) > 0
+#     def set_active(self, user_id: int, resume_id: int) -> bool:
+#         """激活指定简历（同时取消其他激活状态）"""
+#         # 先取消该用户的所有激活状态
+#         self.update_user_resumes(user_id, {'is_active': 0})
+#         # 激活指定简历
+#         return self.update(resume_id, {'is_active': 1}) > 0
 
-    def update_user_resumes(self, user_id: int, data: Dict[str, Any]) -> int:
-        """更新用户所有记录（用于取消激活等批量操作）"""
-        # 需要自定义 SQL 因为 BaseModel 不支持批量更新 WHERE 条件
-        sql = f"UPDATE `{self.table_name}` SET {', '.join([f'{k} = %s' for k in data.keys()])} WHERE user_id = %s"
-        values = tuple(data.values()) + (user_id,)
-        return self.db.execute_update(sql, values)
+#     def update_user_resumes(self, user_id: int, data: Dict[str, Any]) -> int:
+#         """更新用户所有记录（用于取消激活等批量操作）"""
+#         # 需要自定义 SQL 因为 BaseModel 不支持批量更新 WHERE 条件
+#         sql = f"UPDATE `{self.table_name}` SET {', '.join([f'{k} = %s' for k in data.keys()])} WHERE user_id = %s"
+#         values = tuple(data.values()) + (user_id,)
+#         return self.db.execute_update(sql, values)
 
-    def delete(self, resume_id: int) -> int:
-        """删除简历记录"""
-        return self.delete(resume_id)
+#     def delete(self, resume_id: int) -> int:
+#         """删除简历记录"""
+#         return self.delete(resume_id)
 
 if __name__ == '__main__':
     # ========== 演示 1: 使用 BaseModel 基类和 UserModel 子类 ==========

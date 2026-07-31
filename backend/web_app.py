@@ -7,8 +7,9 @@ import sys
 import uuid
 import time
 import logging
+import io
+import tempfile
 from pathlib import Path
-from typing import Dict, Any, Optional, List
 
 # 确保可以导入项目根目录的模块
 project_root = Path(__file__).parent.parent  # 从 backend/ 回到项目根目录
@@ -21,25 +22,14 @@ from fastapi.responses import HTMLResponse, FileResponse, Response
 from langchain_core.messages import HumanMessage, AIMessage
 import asyncio
 
-# Pydantic模型用于数据验证
-from pydantic import BaseModel
-
-class UserCredentials(BaseModel):
-    username: str
-    password: str
-
-class UserRegister(BaseModel):
-    username: str
-    email: str
-    password: str
 
 # 导入（所有模块都在项目根目录下）
 from rag.ChromaServer import ChromaServer
 from agent.tools import agent_tools
 from model.MoelFactory import ChatModelIni
-from utils.readyml_tool import load_yaml_config, load_pdf
+from utils.readyml_tool import load_yaml_config
 from utils.logging_tool import logger
-
+from typing import Dict, Any, Optional
 app = FastAPI(title="面试模拟 Agent Web版", version="1.0.0")
 
 # 全局变量
@@ -105,12 +95,27 @@ def build_agent():
 
 
 def init_session(session_id: str):
-    """初始化一个会话"""
-    _global_sessions[session_id] = {
+    """初始化一个会话，同时创建数据库中的会话记录"""
+    session_data = {
         "chat_history": [],
         "status": "initialized",
-        "created_at": int(time.time())
+        "created_at": int(time.time()),
+        "db_session_id": None  # 数据库中的会话ID
     }
+    _global_sessions[session_id] = session_data
+
+    # 同时在数据库中创建会话记录
+    try:
+        from sqlClass.chat_session_model import ChatSessionModel
+        chat_session_model = ChatSessionModel()
+        db_session_id = chat_session_model.create_session(
+            user_id=0,  # 0 表示未登录用户，登录后会更新
+            session_name=f"会话_{session_id[:8]}"
+        )
+        if db_session_id:
+            session_data["db_session_id"] = db_session_id
+    except Exception as e:
+        logger.debug(f"创建会话记录失败: {e}")  # 不记录为错误，因为可能是表不存在
 
 
 def get_last_ai_message(messages):
@@ -119,6 +124,31 @@ def get_last_ai_message(messages):
         if isinstance(msg, AIMessage):
             return msg
     return None
+
+
+def save_message_to_db(session_id: str, role: str, content: str):
+    """
+    保存单条消息到数据库
+    role: "user" 或 "assistant"
+    """
+    try:
+        session = _global_sessions.get(session_id)
+        if not session:
+            return
+
+        db_session_id = session.get("db_session_id")
+        if not db_session_id:
+            return
+
+        from sqlClass.chat_session_model import ChatSessionContentModel
+        content_model = ChatSessionContentModel()
+        content_model.add_content(
+            session_id=db_session_id,
+            role=role,
+            content=content
+        )
+    except Exception as e:
+        logger.debug(f"保存消息到数据库失败: {e}")
 
 
 # 定义常用邮箱后缀
@@ -494,8 +524,10 @@ async def upload_resume(request: Request):
     上传简历文件
     - 接收 multipart/form-data，字段名 file
     - 仅允许 .pdf 和 .docx 格式
-    - markitdown 提取纯文本后存入数据库（不保存原始文件）
-    - 每个用户最多 3 份
+    - 文件大小限制：10MB
+    - 保存原始文件到文件系统，并存储解析后的文本到数据库
+    - 新上传的简历自动激活，同时取消该用户其他所有简历的激活状态
+    - 每个用户最多 3 份简历（总数量，不论激活状态）
     """
     try:
         form = await request.form()
@@ -507,53 +539,113 @@ async def upload_resume(request: Request):
         if not user_id:
             raise HTTPException(status_code=400, detail="缺少 user_id 参数")
 
-        # 验证文件名
-        filename = file_obj.filename.lower()
-        if not (filename.endswith(".pdf") or filename.endswith(".docx")):
+        # 获取文件名并验证格式
+        try:
+            filename = file_obj.filename
+        except Exception:
+            filename = ""
+
+        if not filename:
+            raise HTTPException(status_code=400, detail="缺少文件名")
+
+        filename_lower = filename.lower()
+        if not (filename_lower.endswith(".pdf") or filename_lower.endswith(".docx")):
             raise HTTPException(status_code=400, detail="仅支持 .pdf 和 .docx 格式")
 
-        # 使用 markitdown 从内存流提取文本（不写临时文件）
+        # 读取文件内容以检查大小
         raw_bytes = await file_obj.read()
-        import io
+        file_size = len(raw_bytes)
+        if file_size > 10 * 1024 * 1024:  # 10MB
+            raise HTTPException(status_code=400, detail="文件大小不能超过 10MB")
+
+        # 使用 markitdown 解析文本（先解析，失败则无需保存文件）
         from markitdown import MarkItDown
         md = MarkItDown()
         result = md.convert_stream(
             io.BytesIO(raw_bytes),
-            file_extension=filename.split(".")[-1]
+            file_extension=filename_lower.split(".")[-1]
         )
         resume_text = result.text_content if result else ""
-
+        # print(f"resume_text: {resume_text}, raw_bytes: {len(raw_bytes)}")
         if not resume_text or not resume_text.strip():
-            raise HTTPException(status_code=400, detail="无法从文件中提取文本内容")
+            # 提取失败：可能是扫描件（图片型 PDF）、空文件、或损坏的文件
+            raise HTTPException(
+                status_code=400,
+                detail=f"无法从文件中提取文本内容。该文件可能为扫描件（图片型 PDF），不含可提取的文本。请使用文本型 PDF 或 Word 文档（.pdf/.docx）上传，扫描版 PDF 可先用 OCR 工具转换为文本格式"
+            )
 
-        # 保存到数据库
+        # 先检查数据库上限（避免数据库操作失败后产生孤立文件）
         from sqlClass.resume_model import ResumeModel
         resume_model = ResumeModel()
-        resume_id = resume_model.create(
-            user_id=int(user_id),
-            filename=filename,
-            resume_text=resume_text
-        )
-
-        if resume_id is None:
+        if resume_model.count_total(int(user_id)) >= 3:
             raise HTTPException(status_code=400, detail="上传失败：已达到简历数量上限（3份）")
 
-        # 更新当前会话的 resume_text（如果提供了 session_id）
-        sess_id = request.query_params.get("session_id")
-        if sess_id and sess_id in _global_sessions:
-            _global_sessions[sess_id]["resume_text"] = resume_text
+        # 生成临时文件路径（用于原子写入）
+        upload_dir = project_root / "uploads" / str(user_id)
+        upload_dir.mkdir(parents=True, exist_ok=True)
+        temp_file = upload_dir / f".tmp_{uuid.uuid4()}_{filename_lower}"
 
-        return {
-            "success": True,
-            "message": "简历上传成功",
-            "resume_id": resume_id,
-            "filename": filename,
-            "file_type": filename.split(".")[-1]
-        }
+        try:
+            # 1. 写入临时文件
+            with open(temp_file, "wb") as f:
+                f.write(raw_bytes)
+
+            # 2. 保存到数据库
+            resume_id = resume_model.create(
+                user_id=int(user_id),
+                filename=filename_lower,
+                file_path="",  # 临时为空，稍后更新
+                resume_text=resume_text
+            )
+
+            if resume_id is None:
+                raise RuntimeError("数据库保存失败（create返回None）")
+
+            # 3. 将临时文件重命名为正式文件（原子操作）
+            final_file = upload_dir / filename_lower
+            if final_file.exists():
+                # 如果目标文件已存在，删除它
+                final_file.unlink()
+            temp_file.rename(final_file)
+
+            # 4. 更新数据库中的 file_path
+            resume_model.update(resume_id, {'file_path': str(final_file)})
+
+            # 5. 激活新上传的简历（同时取消该用户其他所有简历的激活状态）
+            resume_model.set_active(int(user_id), resume_id)
+
+            # 更新当前会话的 resume_text（如果提供了 session_id）
+            sess_id = request.query_params.get("session_id")
+            if sess_id and sess_id in _global_sessions:
+                _global_sessions[sess_id]["resume_text"] = resume_text
+
+            return {
+                "success": True,
+                "message": "简历上传成功并激活",
+                "resume_id": resume_id,
+                "filename": filename,
+                "file_type": filename_lower.split(".")[-1]
+            }
+
+        except Exception as e:
+            # 清理临时文件（如果存在）
+            if temp_file.exists():
+                temp_file.unlink()
+            raise HTTPException(status_code=500, detail=f"上传过程中发生错误: {str(e)}")
+
 
     except HTTPException:
         raise
     except Exception as e:
+        # 检查是否是客户端断开连接（用户取消上传）
+        try:
+            from starlette.requests import ClientDisconnect
+            if isinstance(e, ClientDisconnect):
+                logger.info("客户端上传中断")
+                return {"success": False, "message": "上传已中断"}
+        except ImportError:
+            pass
+
         logger.error(f"简历上传错误: {e}", exc_info=True)
         raise HTTPException(status_code=500, detail=f"服务器内部错误: {str(e)[:200]}")
 
@@ -571,19 +663,19 @@ async def list_resumes(request: Request):  # noqa: ARG001
         all_resumes = resume_model.get_all(int(user_id))
 
         # 只返回激活的
-        active_resumes = [r for r in all_resumes if r.get("is_active", 1) == 1]
+        # active_resumes = [r for r in all_resumes if r.get("is_active", 1) == 1]
 
         return {
             "success": True,
-            "count": len(active_resumes),
+            "count": len(all_resumes),
             "resumes": [
                 {
                     "id": r["id"],
                     "filename": r["filename"],
                     "uploaded_at": str(r.get("uploaded_at", "")),
-                    "is_active": r.get("is_active", 1)
+                    "is_active": r.get("is_active", 0)
                 }
-                for r in active_resumes
+                for r in all_resumes
             ]
         }
     except Exception as e:
@@ -593,7 +685,7 @@ async def list_resumes(request: Request):  # noqa: ARG001
 
 @app.delete("/api/resume/{resume_id}")
 async def delete_resume(resume_id: int):
-    """删除简历（逻辑删除）"""
+    """删除简历（逻辑删除，同时删除原始文件）"""
     try:
         from sqlClass.resume_model import ResumeModel
         resume_model = ResumeModel()
@@ -602,6 +694,13 @@ async def delete_resume(resume_id: int):
         if not resume:
             raise HTTPException(status_code=404, detail="简历不存在")
 
+        # 先删除原始文件（如果存在）
+        file_path = resume.get("file_path", "")
+        if file_path:
+            from utils.file_utils import delete_resume_file
+            delete_resume_file(file_path)
+
+        # 逻辑删除文件
         resume_model.deactivate(resume_id)
 
         return {
@@ -676,11 +775,21 @@ async def init_session_endpoint(session_id: str):
 @app.post("/api/sessions/{session_id}/chat")
 async def chat(session_id: str, request: Request):
     """对话接口 - 用户发送消息，Agent回复"""
+    # 如果会话不存在，自动创建（容错处理，解决session过期问题）
     if session_id not in _global_sessions:
-        raise HTTPException(status_code=404, detail="会话不存在")
+        _global_sessions[session_id] = {
+            "chat_history": [],
+            "status": "initialized",
+            "created_at": int(time.time())
+        }
+        logger.debug(f"自动创建新会话: {session_id}")
 
     data = await request.json()
     user_message = data.get("message", "").strip()
+    print(user_message)
+
+    # 保存用户消息到数据库（无论是否特殊命令）
+    save_message_to_db(session_id, "user", user_message)
 
     if not user_message:
         raise HTTPException(status_code=400, detail="消息内容不能为空")
@@ -694,55 +803,40 @@ async def chat(session_id: str, request: Request):
     # 处理特殊命令
     if user_message == "/start":
         try:
-            # 从会话中获取已上传的简历文本
             session = _global_sessions[session_id]
-            resume_text = session.get("resume_text", "")
+            user_id = session.get("user_id")
 
-            # 如果 session 中没有缓存，从数据库读取激活简历
-            if not resume_text.strip():
-                uid = session.get("user_id")
-                if uid:
-                    from sqlClass.resume_model import ResumeModel
-                    resume_model = ResumeModel()
-                    active_resume = resume_model.get_active(uid)
-                    if active_resume:
-                        resume_text = active_resume.get("file_path", "")
-                        session["resume_text"] = resume_text
-
-            # 如果还没找到，尝试读默认 PDF（向后兼容）
-            if not resume_text.strip():
-                from utils.readyml_tool import load_pdf
-                user_resum = load_pdf()
-                if not user_resum:
-                    return {
-                        "session_id": session_id,
-                        "message": "[错误] 未找到简历文件，请先上传简历",
-                        "role": "error"
-                    }
-                resume_text = "\n".join([doc.page_content for doc in user_resum])
+            # 检查是否有 user_id
+            if not user_id:
+                save_message_to_db(session_id, "user", user_message)
+                return {
+                    "session_id": session_id,
+                    "message": "[请先登录] 请先登录或注册用户，然后上传简历",
+                    "role": "error",
+                    "type": "error"
+                }
 
             # 清理旧对话历史
             chat_history = session["chat_history"]
             chat_history.clear()
 
-            # 设置线程上下文，让 get_job_working 能读取到简历信息
-            from utils.session_context import set_current_session
-            set_current_session(
-                session_id=session_id,
-                resume_text=resume_text
-            )
+            # 保存用户消息到数据库
+            save_message_to_db(session_id, "user", user_message)
 
-            # 让 Agent 主导面试流程
-            chat_history.append(HumanMessage(content="开始面试，请先获取我的简历信息"))
+            # 让 Agent 主导面试流程 - Agent 会自动调用 get_job_working() 获取简历
+            chat_history.append(HumanMessage(content=f"开始面试，请先获取我的简历信息,我的user_id是{user_id}"))
 
             agent = get_agent()
             response = agent.invoke({"messages": chat_history})
             messages = response.get("messages", [])
             last_ai = get_last_ai_message(messages)
-            ai_reply = last_ai.content if last_ai else ""
+            ai_reply = last_ai.content if last_ai and isinstance(last_ai.content, str) else ""
 
             chat_history.append(AIMessage(content=ai_reply))
             session["status"] = "interviewing"
+
+            # 保存 agent 回复到数据库
+            save_message_to_db(session_id, "agent", ai_reply)
 
             return {
                 "session_id": session_id,
@@ -759,16 +853,22 @@ async def chat(session_id: str, request: Request):
             }
 
     elif user_message == "/end":
+        # 保存用户消息
+        save_message_to_db(session_id, "user", user_message)
         session["chat_history"] = []
         session["status"] = "terminated"
+        end_msg = "面试已结束，可以输入 /start 重新开始"
+        save_message_to_db(session_id, "agent", end_msg)
         return {
             "session_id": session_id,
-            "message": "面试已结束，可以输入 /start 重新开始",
+            "message": end_msg,
             "role": "agent",
             "type": "interview_end"
         }
 
     elif user_message == "/history":
+        # 保存用户消息
+        save_message_to_db(session_id, "user", user_message)
         chat_history = session["chat_history"]
         if not chat_history:
             message_text = "暂无对话历史。"
@@ -779,47 +879,49 @@ async def chat(session_id: str, request: Request):
                 content = msg.content[:100] if isinstance(msg.content, str) else str(msg.content)[:100]
                 lines.append(f"  {i}. [{role}] {content}...")
             message_text = "\n".join(lines)
+        history_msg = f"\n--- 对话历史 ({len(chat_history)} 条) ---\n{message_text}\n---"
+        save_message_to_db(session_id, "agent", history_msg)
         return {
             "session_id": session_id,
-            "message": f"\n--- 对话历史 ({len(chat_history)} 条) ---\n{message_text}\n---",
+            "message": history_msg,
             "role": "agent",
             "type": "history"
         }
 
     elif user_message == "/clear":
+        # 保存用户消息
+        save_message_to_db(session_id, "user", user_message)
         session["chat_history"].clear()
         session["status"] = "initialized"
+        clear_msg = "对话历史已清空。"
+        save_message_to_db(session_id, "agent", clear_msg)
         return {
             "session_id": session_id,
-            "message": "对话历史已清空。",
+            "message": clear_msg,
             "role": "agent",
             "type": "cleared"
         }
 
     elif user_message == "/resume":
         session = _global_sessions[session_id]
-        resume_text = session.get("resume_text", "")
+        user_id = session.get("user_id")
+        
+        # 检查是否有 user_id
+        if not user_id:
+            return {
+                "session_id": session_id,
+                "message": "[请先登录] 请先登录并上传简历",
+                "role": "agent",
+                "type": "resume"
+            }
 
-        # 如果 session 中没有缓存，从数据库读取该用户激活的简历
-        if not resume_text.strip():
-            user_id = session.get("user_id")
-            if user_id:
-                from sqlClass.resume_model import ResumeModel
-                resume_model = ResumeModel()
-                active_resume = resume_model.get_active(user_id)
-                if active_resume:
-                    resume_text = active_resume.get("file_path", "")
-                    # 写回 session 缓存
-                    session["resume_text"] = resume_text
+        # 从数据库获取该用户激活的简历
+        from sqlClass.resume_model import ResumeModel
+        resume_model = ResumeModel()
+        active_resume = resume_model.get_active(user_id)
 
-        # 如果还没有，尝试读默认 PDF（向后兼容）
-        if not resume_text.strip():
-            from utils.readyml_tool import load_pdf
-            user_resum = load_pdf()
-            if user_resum:
-                resume_text = "\n".join([doc.page_content for doc in user_resum])
-
-        if resume_text:
+        if active_resume and active_resume.get("resume_text"):
+            resume_text = active_resume["resume_text"]
             return {
                 "session_id": session_id,
                 "message": f"\n[简历内容]\n{resume_text}",
@@ -829,7 +931,7 @@ async def chat(session_id: str, request: Request):
         else:
             return {
                 "session_id": session_id,
-                "message": "[提示] 未找到简历文件，请上传简历文件",
+                "message": "[提示] 未找到激活的简历，请先上传并激活简历",
                 "role": "agent",
                 "type": "resume_not_found"
             }

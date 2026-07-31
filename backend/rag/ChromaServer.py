@@ -14,7 +14,7 @@ from langchain_text_splitters import RecursiveCharacterTextSplitter
 from utils.path_tool import get_abs_path  
 import os  
 from model.MoelFactory import EmbeddingModelIni
-from utils.readyml_tool import load_pdf,load_txt
+from utils.readyml_tool import load_txt
 from utils.logging_tool import logger
 import hashlib
 import textwrap
@@ -46,8 +46,8 @@ class ChromaServer:
         )
 
         self.retriever = self.chroma.as_retriever(
-            search_type="similarity_score_threshold",
-            search_kwargs={'k': 5, "score_threshold": 0.75}
+            # search_type="similarity_score_threshold", "score_threshold": 0.75
+            search_kwargs={'k': 5,}
         )
 
     def get_retriever(self) -> VectorStoreRetriever:

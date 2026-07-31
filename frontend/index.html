@@ -1,5 +1,6 @@
 <!DOCTYPE html>
 <html lang="zh-CN">
+
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
@@ -31,7 +32,10 @@
             --spacing-2xl: 32px;
         }
 
-        * { box-sizing: border-box; }
+        * {
+            box-sizing: border-box;
+        }
+
         body {
             font-family: Inter, -apple-system, BlinkMacSystemFont, 'Segoe UI', 'PingFang SC', 'Hiragino Sans GB', 'Microsoft YaHei', sans-serif;
             background: var(--color-canvas);
@@ -43,137 +47,806 @@
             overflow: hidden;
         }
 
-        .layout { display: flex; height: 100vh; gap: 1px; background: var(--color-hairline); }
+        .layout {
+            display: flex;
+            height: 100vh;
+            gap: 1px;
+            background: var(--color-hairline);
+        }
 
-        .sidebar { width: 340px; min-width: 340px; background: var(--color-canvas); display: flex; flex-direction: column; overflow-y: auto; }
-        .sidebar::-webkit-scrollbar { width: 4px; }
-        .sidebar::-webkit-scrollbar-track { background: transparent; }
-        .sidebar::-webkit-scrollbar-thumb { background: var(--color-hairline); border-radius: 2px; }
+        .sidebar {
+            width: 340px;
+            min-width: 340px;
+            background: var(--color-canvas);
+            display: flex;
+            flex-direction: column;
+            overflow-y: auto;
+        }
 
-        .sidebar-section { padding: var(--spacing-lg) var(--spacing-xl); border-bottom: 1px solid var(--color-hairline); }
-        .sidebar-section:last-child { border-bottom: none; }
-        .sidebar-title { font-size: 11px; font-weight: 600; text-transform: uppercase; letter-spacing: 2.52px; color: var(--color-mute); margin: 0 0 var(--spacing-md) 0; }
+        .sidebar::-webkit-scrollbar {
+            width: 4px;
+        }
 
-        .brand-section { padding: var(--spacing-xl); border-bottom: 1px solid var(--color-hairline); }
-        .brand-header { display: flex; align-items: center; gap: 10px; margin-bottom: 4px; }
-        .brand-icon { width: 36px; height: 36px; background: var(--color-canvas-soft); border: 1px solid var(--color-hairline); border-radius: var(--radius-md); display: flex; align-items: center; justify-content: center; font-size: 16px; color: var(--color-primary); }
-        .brand-header h1 { margin: 0; font-size: 16px; font-weight: 600; letter-spacing: -0.3px; color: var(--color-ink-strong); }
-        .brand-subtitle { font-size: 12px; color: var(--color-mute); margin: 0; padding-left: 46px; }
+        .sidebar::-webkit-scrollbar-track {
+            background: transparent;
+        }
 
-        .session-card { background: var(--color-canvas-soft); border: 1px solid var(--color-hairline); border-radius: var(--radius-md); padding: var(--spacing-md); }
-        .session-status { display: flex; align-items: center; gap: 8px; font-size: 13px; color: var(--color-body); }
-        .session-status .dot { width: 7px; height: 7px; border-radius: 50%; background: var(--color-primary); flex-shrink: 0; }
-        .session-status .dot.terminated { background: var(--color-mute); }
-        .session-id { font-family: SFMono-Regular, Menlo, Monaco, Consolas, monospace; font-size: 11px; color: var(--color-mute); margin-top: 8px; word-break: break-all; }
+        .sidebar::-webkit-scrollbar-thumb {
+            background: var(--color-hairline);
+            border-radius: 2px;
+        }
 
-        .quick-actions { display: flex; flex-direction: column; gap: 4px; }
-        .action-item { display: flex; align-items: center; justify-content: space-between; padding: 10px var(--spacing-md); background: var(--color-canvas-soft); border: 1px solid var(--color-hairline); border-radius: var(--radius-md); cursor: pointer; transition: all 0.15s; }
-        .action-item:hover { border-color: var(--color-primary); }
-        .action-item:hover .action-icon { color: var(--color-primary); }
-        .action-item.disabled { opacity: 0.5; cursor: not-allowed; }
-        .action-item.disabled:hover { border-color: var(--color-hairline); }
-        .action-item.disabled:hover .action-icon { color: var(--color-mute); }
-        .action-left { display: flex; align-items: center; gap: 10px; }
-        .action-icon { font-size: 13px; color: var(--color-mute); width: 20px; text-align: center; transition: color 0.15s; }
-        .action-name { font-size: 13px; font-weight: 500; color: var(--color-ink); }
-        .action-desc { font-size: 11px; color: var(--color-mute); margin-top: 2px; }
-        .action-tag { font-family: SFMono-Regular, Menlo, Monaco, Consolas, monospace; font-size: 11px; font-weight: 550; color: var(--color-primary); background: var(--color-canvas); border: 1px solid var(--color-hairline); padding: 2px 6px; border-radius: var(--radius-sm); }
+        .sidebar-section {
+            padding: var(--spacing-lg) var(--spacing-xl);
+            border-bottom: 1px solid var(--color-hairline);
+        }
 
-        .tip-item { display: flex; gap: 10px; padding: var(--spacing-sm) 0; font-size: 13px; color: var(--color-body); line-height: 1.5; }
-        .tip-item i { color: var(--color-primary-soft); margin-top: 3px; flex-shrink: 0; font-size: 12px; }
+        .sidebar-section:last-child {
+            border-bottom: none;
+        }
 
-        .main { flex: 1; display: flex; flex-direction: column; min-width: 0; }
+        .sidebar-title {
+            font-size: 11px;
+            font-weight: 600;
+            text-transform: uppercase;
+            letter-spacing: 2.52px;
+            color: var(--color-mute);
+            margin: 0 0 var(--spacing-md) 0;
+        }
 
-        .top-bar { display: flex; justify-content: space-between; align-items: center; padding: var(--spacing-sm) var(--spacing-lg); border-bottom: 1px solid var(--color-hairline); background: var(--color-canvas-soft); }
-        .top-bar-left { display: flex; align-items: center; gap: 8px; font-size: 13px; color: var(--color-body); }
-        .top-bar-left i { color: var(--color-primary); }
+        .brand-section {
+            padding: var(--spacing-xl);
+            border-bottom: 1px solid var(--color-hairline);
+        }
 
-        .help-button { background: transparent; color: var(--color-mute); border: none; padding: var(--spacing-xs) var(--spacing-md); border-radius: var(--radius-sm); cursor: pointer; font-size: 13px; font-weight: 500; font-family: Inter, sans-serif; transition: all 0.2s; display: flex; align-items: center; gap: 6px; white-space: nowrap; }
-        .help-button:hover { color: var(--color-primary); }
+        .brand-header {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            margin-bottom: 4px;
+        }
 
-        .chat-container { flex: 1; display: flex; flex-direction: column; min-height: 0; }
-        .chat-messages { flex: 1; overflow-y: auto; padding: var(--spacing-lg); display: flex; flex-direction: column; gap: var(--spacing-md); }
-        .chat-messages::-webkit-scrollbar { width: 4px; }
-        .chat-messages::-webkit-scrollbar-track { background: transparent; }
-        .chat-messages::-webkit-scrollbar-thumb { background: var(--color-hairline); border-radius: 2px; }
-        .chat-messages::-webkit-scrollbar-thumb:hover { background: var(--color-primary-deep); }
+        .brand-icon {
+            width: 36px;
+            height: 36px;
+            background: var(--color-canvas-soft);
+            border: 1px solid var(--color-hairline);
+            border-radius: var(--radius-md);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 16px;
+            color: var(--color-primary);
+        }
 
-        .message { animation: slideIn 0.3s ease-out; display: flex; flex-direction: column; gap: 4px; }
-        @keyframes slideIn { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: translateY(0); } }
-        .message.user { align-items: flex-end; }
-        .message.agent { align-items: flex-start; }
-        .message-header { font-size: 11px; color: var(--color-mute); text-transform: uppercase; letter-spacing: 0.5px; display: flex; align-items: center; gap: 6px; }
-        .message.user .message-header { justify-content: flex-end; }
-        .message.agent .message-header { justify-content: flex-start; }
-        .message-content { padding: 12px 16px; border-radius: var(--radius-md); max-width: 70%; word-wrap: break-word; font-size: 14px; line-height: 1.5; }
-        .message.user .message-content { background: var(--color-primary); color: var(--color-on-primary); border-bottom-right-radius: var(--radius-sm); }
-        .message.agent .message-content { background: var(--color-canvas-soft); border: 1px solid var(--color-hairline); border-bottom-left-radius: var(--radius-sm); }
+        .brand-header h1 {
+            margin: 0;
+            font-size: 16px;
+            font-weight: 600;
+            letter-spacing: -0.3px;
+            color: var(--color-ink-strong);
+        }
 
-        .chat-input { padding: var(--spacing-md) var(--spacing-lg); background: var(--color-canvas-soft); border-top: 1px solid var(--color-hairline); display: flex; gap: var(--spacing-sm); }
-        .chat-input textarea { flex: 1; padding: var(--spacing-md) var(--spacing-lg); border: 1px solid var(--color-hairline); border-radius: var(--radius-sm); resize: none; height: 44px; font-size: 14px; font-family: Inter, sans-serif; background: var(--color-canvas); color: var(--color-ink); outline: none; }
-        .chat-input textarea:focus { border-color: var(--color-primary); box-shadow: 0 0 0 2px rgba(0, 217, 146, 0.2); }
-        .chat-input button { background: var(--color-primary); color: var(--color-on-primary); border: none; padding: 0 var(--spacing-lg); border-radius: var(--radius-sm); cursor: pointer; font-size: 14px; font-weight: 600; font-family: Inter, sans-serif; transition: background 0.2s; display: flex; align-items: center; gap: 6px; }
-        .chat-input button:hover { background: var(--color-primary-soft); }
-        .chat-input button.disabled { background: var(--color-hairline); color: var(--color-mute); cursor: not-allowed; }
+        .brand-subtitle {
+            font-size: 12px;
+            color: var(--color-mute);
+            margin: 0;
+            padding-left: 46px;
+        }
 
-        .status-bar { padding: var(--spacing-xs) var(--spacing-lg); background: var(--color-canvas); font-size: 12px; color: var(--color-mute); display: flex; align-items: center; gap: var(--spacing-xs); border-top: 1px solid var(--color-hairline); }
-        .status-bar .dot { width: 6px; height: 6px; background: var(--color-primary); border-radius: 50%; }
-        @keyframes pulse { 0%, 100% { opacity: 1; } 50% { opacity: 0.5; } }
-        .status-bar .dot { animation: pulse 2s infinite; }
+        .session-card {
+            background: var(--color-canvas-soft);
+            border: 1px solid var(--color-hairline);
+            border-radius: var(--radius-md);
+            padding: var(--spacing-md);
+        }
 
-        .typing { display: flex; align-items: center; gap: 8px; padding: 12px 16px; background: var(--color-canvas-soft); border: 1px solid var(--color-hairline); border-radius: var(--radius-md); border-bottom-left-radius: var(--radius-sm); max-width: 70%; }
-        .typing-dot { width: 8px; height: 8px; background: var(--color-mute); border-radius: 50%; animation: typing 1.4s infinite ease-in-out both; }
-        .typing-dot:nth-child(1) { animation-delay: -0.32s; }
-        .typing-dot:nth-child(2) { animation-delay: -0.16s; }
-        @keyframes typing { 0%, 80%, 100% { transform: scale(0); } 40% { transform: scale(1); } }
+        .session-status {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            font-size: 13px;
+            color: var(--color-body);
+        }
 
-        .modal-overlay { display: none; position: fixed; top: 0; left: 0; right: 0; bottom: 0; background: rgba(0, 0, 0, 0.7); z-index: 1000; align-items: center; justify-content: center; animation: fadeIn 0.2s ease-out; }
-        .modal-overlay.active { display: flex; }
-        @keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } }
+        .session-status .dot {
+            width: 7px;
+            height: 7px;
+            border-radius: 50%;
+            background: var(--color-primary);
+            flex-shrink: 0;
+        }
 
-        .modal { background: var(--color-canvas); border: 1px solid var(--color-hairline); border-radius: var(--radius-md); max-width: 600px; width: 90%; max-height: 80vh; overflow: hidden; display: flex; flex-direction: column; animation: slideUp 0.3s ease-out; }
-        @keyframes slideUp { from { transform: translateY(20px); opacity: 0; } to { transform: translateY(0); opacity: 1; } }
+        .session-status .dot.terminated {
+            background: var(--color-mute);
+        }
 
-        .modal-header { padding: var(--spacing-lg) var(--spacing-2xl); border-bottom: 1px solid var(--color-hairline); display: flex; justify-content: space-between; align-items: center; }
-        .modal-header h2 { margin: 0; font-size: 24px; font-weight: 700; color: var(--color-ink-strong); letter-spacing: -0.6px; }
-        .modal-close { background: transparent; border: none; color: var(--color-mute); font-size: 24px; cursor: pointer; padding: 0; width: 32px; height: 32px; display: flex; align-items: center; justify-content: center; border-radius: var(--radius-sm); transition: all 0.2s; }
-        .modal-close:hover { background: var(--color-canvas-soft); color: var(--color-ink); }
+        .session-id {
+            font-family: SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+            font-size: 11px;
+            color: var(--color-mute);
+            margin-top: 8px;
+            word-break: break-all;
+        }
 
-        .modal-body { padding: var(--spacing-2xl); overflow-y: auto; }
-        .modal-body::-webkit-scrollbar { width: 4px; }
-        .modal-body::-webkit-scrollbar-thumb { background: var(--color-hairline); border-radius: 2px; }
+        .quick-actions {
+            display: flex;
+            flex-direction: column;
+            gap: 4px;
+        }
 
-        .command-item { background: var(--color-canvas-soft); border: 1px solid var(--color-hairline); border-radius: var(--radius-md); padding: var(--spacing-lg); margin-bottom: var(--spacing-md); }
-        .command-item:last-child { margin-bottom: 0; }
-        .command-item code { font-family: SFMono-Regular, Menlo, Monaco, Consolas, monospace; font-size: 14px; font-weight: 550; background: var(--color-canvas); color: var(--color-primary); padding: 4px 10px; border-radius: var(--radius-sm); border: 1px solid var(--color-hairline); display: inline-block; margin-bottom: var(--spacing-sm); }
-        .command-item p { margin: 0; font-size: 14px; color: var(--color-body); line-height: 1.5; }
+        .action-item {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            padding: 10px var(--spacing-md);
+            background: var(--color-canvas-soft);
+            border: 1px solid var(--color-hairline);
+            border-radius: var(--radius-md);
+            cursor: pointer;
+            transition: all 0.15s;
+        }
 
-        @media (max-width: 768px) { .layout { flex-direction: column; } .sidebar { width: 100%; min-width: unset; max-height: 200px; overflow-y: auto; } }
+        .action-item:hover {
+            border-color: var(--color-primary);
+        }
+
+        .action-item:hover .action-icon {
+            color: var(--color-primary);
+        }
+
+        .action-item.disabled {
+            opacity: 0.5;
+            cursor: not-allowed;
+        }
+
+        .action-item.disabled:hover {
+            border-color: var(--color-hairline);
+        }
+
+        .action-item.disabled:hover .action-icon {
+            color: var(--color-mute);
+        }
+
+        .action-left {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+
+        .action-icon {
+            font-size: 13px;
+            color: var(--color-mute);
+            width: 20px;
+            text-align: center;
+            transition: color 0.15s;
+        }
+
+        .action-name {
+            font-size: 13px;
+            font-weight: 500;
+            color: var(--color-ink);
+        }
+
+        .action-desc {
+            font-size: 11px;
+            color: var(--color-mute);
+            margin-top: 2px;
+        }
+
+        .action-tag {
+            font-family: SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+            font-size: 11px;
+            font-weight: 550;
+            color: var(--color-primary);
+            background: var(--color-canvas);
+            border: 1px solid var(--color-hairline);
+            padding: 2px 6px;
+            border-radius: var(--radius-sm);
+        }
+
+        .tip-item {
+            display: flex;
+            gap: 10px;
+            padding: var(--spacing-sm) 0;
+            font-size: 13px;
+            color: var(--color-body);
+            line-height: 1.5;
+        }
+
+        .tip-item i {
+            color: var(--color-primary-soft);
+            margin-top: 3px;
+            flex-shrink: 0;
+            font-size: 12px;
+        }
+
+        .main {
+            flex: 1;
+            display: flex;
+            flex-direction: column;
+            min-width: 0;
+        }
+
+        .top-bar {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: var(--spacing-sm) var(--spacing-lg);
+            border-bottom: 1px solid var(--color-hairline);
+            background: var(--color-canvas-soft);
+        }
+
+        .top-bar-left {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            font-size: 13px;
+            color: var(--color-body);
+        }
+
+        .top-bar-left i {
+            color: var(--color-primary);
+        }
+
+        .help-button {
+            background: transparent;
+            color: var(--color-mute);
+            border: none;
+            padding: var(--spacing-xs) var(--spacing-md);
+            border-radius: var(--radius-sm);
+            cursor: pointer;
+            font-size: 13px;
+            font-weight: 500;
+            font-family: Inter, sans-serif;
+            transition: all 0.2s;
+            display: flex;
+            align-items: center;
+            gap: 6px;
+            white-space: nowrap;
+        }
+
+        .help-button:hover {
+            color: var(--color-primary);
+        }
+
+        .chat-container {
+            flex: 1;
+            display: flex;
+            flex-direction: column;
+            min-height: 0;
+        }
+
+        .chat-messages {
+            flex: 1;
+            overflow-y: auto;
+            padding: var(--spacing-lg);
+            display: flex;
+            flex-direction: column;
+            gap: var(--spacing-md);
+        }
+
+        .chat-messages::-webkit-scrollbar {
+            width: 4px;
+        }
+
+        .chat-messages::-webkit-scrollbar-track {
+            background: transparent;
+        }
+
+        .chat-messages::-webkit-scrollbar-thumb {
+            background: var(--color-hairline);
+            border-radius: 2px;
+        }
+
+        .chat-messages::-webkit-scrollbar-thumb:hover {
+            background: var(--color-primary-deep);
+        }
+
+        .message {
+            animation: slideIn 0.3s ease-out;
+            display: flex;
+            flex-direction: column;
+            gap: 4px;
+        }
+
+        @keyframes slideIn {
+            from {
+                opacity: 0;
+                transform: translateY(10px);
+            }
+
+            to {
+                opacity: 1;
+                transform: translateY(0);
+            }
+        }
+
+        .message.user {
+            align-items: flex-end;
+        }
+
+        .message.agent {
+            align-items: flex-start;
+        }
+
+        .message-header {
+            font-size: 11px;
+            color: var(--color-mute);
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+            display: flex;
+            align-items: center;
+            gap: 6px;
+        }
+
+        .message.user .message-header {
+            justify-content: flex-end;
+        }
+
+        .message.agent .message-header {
+            justify-content: flex-start;
+        }
+
+        .message-content {
+            padding: 12px 16px;
+            border-radius: var(--radius-md);
+            max-width: 70%;
+            word-wrap: break-word;
+            font-size: 14px;
+            line-height: 1.5;
+        }
+
+        .message.user .message-content {
+            background: var(--color-primary);
+            color: var(--color-on-primary);
+            border-bottom-right-radius: var(--radius-sm);
+        }
+
+        .message.agent .message-content {
+            background: var(--color-canvas-soft);
+            border: 1px solid var(--color-hairline);
+            border-bottom-left-radius: var(--radius-sm);
+        }
+
+        .chat-input {
+            padding: var(--spacing-md) var(--spacing-lg);
+            background: var(--color-canvas-soft);
+            border-top: 1px solid var(--color-hairline);
+            display: flex;
+            gap: var(--spacing-sm);
+        }
+
+        .chat-input textarea {
+            flex: 1;
+            padding: var(--spacing-md) var(--spacing-lg);
+            border: 1px solid var(--color-hairline);
+            border-radius: var(--radius-sm);
+            resize: none;
+            height: 44px;
+            font-size: 14px;
+            font-family: Inter, sans-serif;
+            background: var(--color-canvas);
+            color: var(--color-ink);
+            outline: none;
+        }
+
+        .chat-input textarea:focus {
+            border-color: var(--color-primary);
+            box-shadow: 0 0 0 2px rgba(0, 217, 146, 0.2);
+        }
+
+        .chat-input button {
+            background: var(--color-primary);
+            color: var(--color-on-primary);
+            border: none;
+            padding: 0 var(--spacing-lg);
+            border-radius: var(--radius-sm);
+            cursor: pointer;
+            font-size: 14px;
+            font-weight: 600;
+            font-family: Inter, sans-serif;
+            transition: background 0.2s;
+            display: flex;
+            align-items: center;
+            gap: 6px;
+        }
+
+        .chat-input button:hover {
+            background: var(--color-primary-soft);
+        }
+
+        .chat-input button.disabled {
+            background: var(--color-hairline);
+            color: var(--color-mute);
+            cursor: not-allowed;
+        }
+
+        .status-bar {
+            padding: var(--spacing-xs) var(--spacing-lg);
+            background: var(--color-canvas);
+            font-size: 12px;
+            color: var(--color-mute);
+            display: flex;
+            align-items: center;
+            gap: var(--spacing-xs);
+            border-top: 1px solid var(--color-hairline);
+        }
+
+        .status-bar .dot {
+            width: 6px;
+            height: 6px;
+            background: var(--color-primary);
+            border-radius: 50%;
+        }
+
+        @keyframes pulse {
+
+            0%,
+            100% {
+                opacity: 1;
+            }
+
+            50% {
+                opacity: 0.5;
+            }
+        }
+
+        .status-bar .dot {
+            animation: pulse 2s infinite;
+        }
+
+        .typing {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            padding: 12px 16px;
+            background: var(--color-canvas-soft);
+            border: 1px solid var(--color-hairline);
+            border-radius: var(--radius-md);
+            border-bottom-left-radius: var(--radius-sm);
+            max-width: 70%;
+        }
+
+        .typing-dot {
+            width: 8px;
+            height: 8px;
+            background: var(--color-mute);
+            border-radius: 50%;
+            animation: typing 1.4s infinite ease-in-out both;
+        }
+
+        .typing-dot:nth-child(1) {
+            animation-delay: -0.32s;
+        }
+
+        .typing-dot:nth-child(2) {
+            animation-delay: -0.16s;
+        }
+
+        @keyframes typing {
+
+            0%,
+            80%,
+            100% {
+                transform: scale(0);
+            }
+
+            40% {
+                transform: scale(1);
+            }
+        }
+
+        .modal-overlay {
+            display: none;
+            position: fixed;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background: rgba(0, 0, 0, 0.7);
+            z-index: 1000;
+            align-items: center;
+            justify-content: center;
+            animation: fadeIn 0.2s ease-out;
+        }
+
+        .modal-overlay.active {
+            display: flex;
+        }
+
+        @keyframes fadeIn {
+            from {
+                opacity: 0;
+            }
+
+            to {
+                opacity: 1;
+            }
+        }
+
+        .modal {
+            background: var(--color-canvas);
+            border: 1px solid var(--color-hairline);
+            border-radius: var(--radius-md);
+            max-width: 600px;
+            width: 90%;
+            max-height: 80vh;
+            overflow: hidden;
+            display: flex;
+            flex-direction: column;
+            animation: slideUp 0.3s ease-out;
+        }
+
+        @keyframes slideUp {
+            from {
+                transform: translateY(20px);
+                opacity: 0;
+            }
+
+            to {
+                transform: translateY(0);
+                opacity: 1;
+            }
+        }
+
+        .modal-header {
+            padding: var(--spacing-lg) var(--spacing-2xl);
+            border-bottom: 1px solid var(--color-hairline);
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        .modal-header h2 {
+            margin: 0;
+            font-size: 24px;
+            font-weight: 700;
+            color: var(--color-ink-strong);
+            letter-spacing: -0.6px;
+        }
+
+        .modal-close {
+            background: transparent;
+            border: none;
+            color: var(--color-mute);
+            font-size: 24px;
+            cursor: pointer;
+            padding: 0;
+            width: 32px;
+            height: 32px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            border-radius: var(--radius-sm);
+            transition: all 0.2s;
+        }
+
+        .modal-close:hover {
+            background: var(--color-canvas-soft);
+            color: var(--color-ink);
+        }
+
+        .modal-body {
+            padding: var(--spacing-2xl);
+            overflow-y: auto;
+        }
+
+        .modal-body::-webkit-scrollbar {
+            width: 4px;
+        }
+
+        .modal-body::-webkit-scrollbar-thumb {
+            background: var(--color-hairline);
+            border-radius: 2px;
+        }
+
+        .command-item {
+            background: var(--color-canvas-soft);
+            border: 1px solid var(--color-hairline);
+            border-radius: var(--radius-md);
+            padding: var(--spacing-lg);
+            margin-bottom: var(--spacing-md);
+        }
+
+        .command-item:last-child {
+            margin-bottom: 0;
+        }
+
+        .command-item code {
+            font-family: SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+            font-size: 14px;
+            font-weight: 550;
+            background: var(--color-canvas);
+            color: var(--color-primary);
+            padding: 4px 10px;
+            border-radius: var(--radius-sm);
+            border: 1px solid var(--color-hairline);
+            display: inline-block;
+            margin-bottom: var(--spacing-sm);
+        }
+
+        .command-item p {
+            margin: 0;
+            font-size: 14px;
+            color: var(--color-body);
+            line-height: 1.5;
+        }
+
+        @media (max-width: 768px) {
+            .layout {
+                flex-direction: column;
+            }
+
+            .sidebar {
+                width: 100%;
+                min-width: unset;
+                max-height: 200px;
+                overflow-y: auto;
+            }
+        }
 
         /* === 登录/注册模态框样式 === */
-        .auth-modal { display: none; position: fixed; top: 0; left: 0; right: 0; bottom: 0; background: rgba(0, 0, 0, 0.85); z-index: 2000; align-items: center; justify-content: center; }
-        .auth-modal.active { display: flex; }
-        .auth-card { background: var(--color-canvas); border: 1px solid var(--color-hairline); border-radius: var(--radius-md); width: 100%; max-width: 400px; padding: var(--spacing-2xl); animation: slideUp 0.3s ease-out; }
-        .auth-card h3 { margin: 0 0 var(--spacing-xl) 0; font-size: 24px; font-weight: 700; color: var(--color-ink-strong); text-align: center; letter-spacing: -0.6px; }
-        .form-group { margin-bottom: var(--spacing-lg); }
-        .form-label { display: block; margin-bottom: var(--spacing-xs); font-size: 12px; color: var(--color-mute); text-transform: uppercase; letter-spacing: 0.5px; }
-        .form-input { width: 100%; padding: var(--spacing-md) var(--spacing-lg); background: var(--color-canvas-soft); border: 1px solid var(--color-hairline); border-radius: var(--radius-sm); color: var(--color-ink); font-size: 14px; font-family: Inter, sans-serif; transition: border-color 0.2s; }
-        .form-input:focus { outline: none; border-color: var(--color-primary); box-shadow: 0 0 0 2px rgba(0, 217, 146, 0.2); }
-        .form-actions { display: flex; flex-direction: column; gap: var(--spacing-md); }
-        .btn { padding: 12px var(--spacing-lg); border-radius: var(--radius-sm); font-size: 14px; font-weight: 600; font-family: Inter, sans-serif; cursor: pointer; transition: all 0.2s; display: flex; align-items: center; justify-content: center; gap: 8px; }
-        .btn-primary { background: var(--color-primary); color: var(--color-on-primary); border: none; }
-        .btn-primary:hover { background: var(--color-primary-soft); }
-        .btn-outline { background: transparent; color: var(--color-ink); border: 1px solid var(--color-hairline); }
-        .btn-outline:hover { border-color: var(--color-primary); color: var(--color-primary); }
-        .auth-toggle { text-align: center; font-size: 13px; color: var(--color-body); margin-top: var(--spacing-md); display: flex; justify-content: center; gap: 4px; }
-        .auth-toggle a { color: var(--color-primary); text-decoration: none; font-weight: 500; }
-        .auth-toggle a:hover { text-decoration: underline; }
-        .error-message { background: rgba(255, 100, 100, 0.1); border: 1px solid rgba(255, 100, 100, 0.3); border-radius: var(--radius-sm); padding: 8px 12px; font-size: 12px; color: #ff6464; margin-top: var(--spacing-sm); display: none; }
-        .error-message.show { display: block; }
-        .success-message { background: rgba(0, 217, 146, 0.1); border: 1px solid rgba(0, 217, 146, 0.3); border-radius: var(--radius-sm); padding: 8px 12px; font-size: 12px; color: var(--color-primary); margin-top: var(--spacing-sm); display: none; }
-        .success-message.show { display: block; }
+        .auth-modal {
+            display: none;
+            position: fixed;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background: rgba(0, 0, 0, 0.85);
+            z-index: 2000;
+            align-items: center;
+            justify-content: center;
+        }
+
+        .auth-modal.active {
+            display: flex;
+        }
+
+        .auth-card {
+            background: var(--color-canvas);
+            border: 1px solid var(--color-hairline);
+            border-radius: var(--radius-md);
+            width: 100%;
+            max-width: 400px;
+            padding: var(--spacing-2xl);
+            animation: slideUp 0.3s ease-out;
+        }
+
+        .auth-card h3 {
+            margin: 0 0 var(--spacing-xl) 0;
+            font-size: 24px;
+            font-weight: 700;
+            color: var(--color-ink-strong);
+            text-align: center;
+            letter-spacing: -0.6px;
+        }
+
+        .form-group {
+            margin-bottom: var(--spacing-lg);
+        }
+
+        .form-label {
+            display: block;
+            margin-bottom: var(--spacing-xs);
+            font-size: 12px;
+            color: var(--color-mute);
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+        }
+
+        .form-input {
+            width: 100%;
+            padding: var(--spacing-md) var(--spacing-lg);
+            background: var(--color-canvas-soft);
+            border: 1px solid var(--color-hairline);
+            border-radius: var(--radius-sm);
+            color: var(--color-ink);
+            font-size: 14px;
+            font-family: Inter, sans-serif;
+            transition: border-color 0.2s;
+        }
+
+        .form-input:focus {
+            outline: none;
+            border-color: var(--color-primary);
+            box-shadow: 0 0 0 2px rgba(0, 217, 146, 0.2);
+        }
+
+        .form-actions {
+            display: flex;
+            flex-direction: column;
+            gap: var(--spacing-md);
+        }
+
+        .btn {
+            padding: 12px var(--spacing-lg);
+            border-radius: var(--radius-sm);
+            font-size: 14px;
+            font-weight: 600;
+            font-family: Inter, sans-serif;
+            cursor: pointer;
+            transition: all 0.2s;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 8px;
+        }
+
+        .btn-primary {
+            background: var(--color-primary);
+            color: var(--color-on-primary);
+            border: none;
+        }
+
+        .btn-primary:hover {
+            background: var(--color-primary-soft);
+        }
+
+        .btn-outline {
+            background: transparent;
+            color: var(--color-ink);
+            border: 1px solid var(--color-hairline);
+        }
+
+        .btn-outline:hover {
+            border-color: var(--color-primary);
+            color: var(--color-primary);
+        }
+
+        .auth-toggle {
+            text-align: center;
+            font-size: 13px;
+            color: var(--color-body);
+            margin-top: var(--spacing-md);
+            display: flex;
+            justify-content: center;
+            gap: 4px;
+        }
+
+        .auth-toggle a {
+            color: var(--color-primary);
+            text-decoration: none;
+            font-weight: 500;
+        }
+
+        .auth-toggle a:hover {
+            text-decoration: underline;
+        }
+
+        .error-message {
+            background: rgba(255, 100, 100, 0.1);
+            border: 1px solid rgba(255, 100, 100, 0.3);
+            border-radius: var(--radius-sm);
+            padding: 8px 12px;
+            font-size: 12px;
+            color: #ff6464;
+            margin-top: var(--spacing-sm);
+            display: none;
+        }
+
+        .error-message.show {
+            display: block;
+        }
+
+        .success-message {
+            background: rgba(0, 217, 146, 0.1);
+            border: 1px solid rgba(0, 217, 146, 0.3);
+            border-radius: var(--radius-sm);
+            padding: 8px 12px;
+            font-size: 12px;
+            color: var(--color-primary);
+            margin-top: var(--spacing-sm);
+            display: none;
+        }
+
+        .success-message.show {
+            display: block;
+        }
     </style>
 </head>
+
 <body>
     <input type="hidden" id="sessionIdInput" value="{SESSION_ID}">
     <input type="hidden" id="userIdInput" value="">
@@ -219,7 +892,8 @@
                 </div>
                 <div class="form-actions">
                     <button type="submit" class="btn btn-primary"><i class="fas fa-register"></i> 注册</button>
-                    <button type="button" class="btn btn-outline" id="backToLoginBtn"><i class="fas fa-arrow-left"></i> 返回登录</button>
+                    <button type="button" class="btn btn-outline" id="backToLoginBtn"><i class="fas fa-arrow-left"></i>
+                        返回登录</button>
                 </div>
                 <div class="success-message" id="registerSuccessMessage">注册成功！您已自动登录，欢迎加入！</div>
                 <div class="error-message" id="registerErrorMessage"></div>
@@ -230,31 +904,86 @@
     <div class="layout">
         <aside class="sidebar">
             <div class="brand-section">
-                <div class="brand-header"><div class="brand-icon"><i class="fas fa-comment-dots"></i></div><h1>面试模拟 Agent</h1></div>
+                <div class="brand-header">
+                    <div class="brand-icon"><i class="fas fa-comment-dots"></i></div>
+                    <h1>面试模拟 Agent</h1>
+                </div>
                 <p class="brand-subtitle">Web版 · 智能面试助手</p>
             </div>
             <div class="sidebar-section">
                 <div class="session-card">
-                    <div class="session-status"><span class="dot" id="sessionDot"></span><span id="sessionStatusText">Agent 就绪</span></div>
+                    <div class="session-status"><span class="dot" id="sessionDot"></span><span
+                            id="sessionStatusText">Agent 就绪</span></div>
                     <div class="session-id" id="sessionIdDisplay"></div>
                 </div>
             </div>
             <div class="sidebar-section">
                 <div class="sidebar-title">快捷操作</div>
                 <div class="quick-actions">
-                    <div class="action-item disabled" data-command="/start"><div class="action-left"><i class="fas fa-play action-icon"></i><div><div class="action-name">开始面试</div><div class="action-desc">进入面试模拟流程</div></div></div><span class="action-tag">/start</span></div>
-                    <div class="action-item disabled" data-command="/resume"><div class="action-left"><i class="fas fa-file-alt action-icon"></i><div><div class="action-name">查看简历</div><div class="action-desc">预览当前简历内容</div></div></div><span class="action-tag">/resume</span></div>
-                    <div class="action-item disabled" data-command="/history"><div class="action-left"><i class="fas fa-clock-rotate-left action-icon"></i><div><div class="action-name">对话历史</div><div class="action-desc">查看之前的对话记录</div></div></div><span class="action-tag">/history</span></div>
-                    <div class="action-item disabled" data-command="/end"><div class="action-left"><i class="fas fa-stop action-icon"></i><div><div class="action-name">结束面试</div><div class="action-desc">终止当前面试会话</div></div></div><span class="action-tag">/end</span></div>
-                    <div class="action-item disabled" id="uploadResumeBtn"><div class="action-left"><i class="fas fa-upload action-icon"></i><div><div class="action-name">上传简历</div><div class="action-desc">上传 PDF 或 DOCX 文件</div></div></div></div>
-                    <div class="action-item disabled" id="manageResumeBtn"><div class="action-left"><i class="fas fa-list action-icon"></i><div><div class="action-name">管理简历</div><div class="action-desc">查看、删除已上传的简历</div></div></div></div>
-                    <div class="action-item disabled" data-command="/clear"><div class="action-left"><i class="fas fa-trash-can action-icon"></i><div><div class="action-name">清空历史</div><div class="action-desc">清除所有对话记录</div></div></div><span class="action-tag">/clear</span></div>
+                    <div class="action-item disabled" data-command="/start">
+                        <div class="action-left"><i class="fas fa-play action-icon"></i>
+                            <div>
+                                <div class="action-name">开始面试</div>
+                                <div class="action-desc">进入面试模拟流程</div>
+                            </div>
+                        </div><span class="action-tag">/start</span>
+                    </div>
+                    <div class="action-item disabled" data-command="/resume">
+                        <div class="action-left"><i class="fas fa-file-alt action-icon"></i>
+                            <div>
+                                <div class="action-name">查看简历</div>
+                                <div class="action-desc">预览当前简历内容</div>
+                            </div>
+                        </div><span class="action-tag">/resume</span>
+                    </div>
+                    <div class="action-item disabled" data-command="/history">
+                        <div class="action-left"><i class="fas fa-clock-rotate-left action-icon"></i>
+                            <div>
+                                <div class="action-name">对话历史</div>
+                                <div class="action-desc">查看之前的对话记录</div>
+                            </div>
+                        </div><span class="action-tag">/history</span>
+                    </div>
+                    <div class="action-item disabled" data-command="/end">
+                        <div class="action-left"><i class="fas fa-stop action-icon"></i>
+                            <div>
+                                <div class="action-name">结束面试</div>
+                                <div class="action-desc">终止当前面试会话</div>
+                            </div>
+                        </div><span class="action-tag">/end</span>
+                    </div>
+                    <div class="action-item disabled" id="uploadResumeBtn">
+                        <div class="action-left"><i class="fas fa-upload action-icon"></i>
+                            <div>
+                                <div class="action-name">上传简历</div>
+                                <div class="action-desc">上传 PDF 或 DOCX 文件</div>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="action-item disabled" id="manageResumeBtn">
+                        <div class="action-left"><i class="fas fa-list action-icon"></i>
+                            <div>
+                                <div class="action-name">管理简历</div>
+                                <div class="action-desc">查看、删除已上传的简历</div>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="action-item disabled" data-command="/clear">
+                        <div class="action-left"><i class="fas fa-trash-can action-icon"></i>
+                            <div>
+                                <div class="action-name">清空历史</div>
+                                <div class="action-desc">清除所有对话记录</div>
+                            </div>
+                        </div><span class="action-tag">/clear</span>
+                    </div>
                 </div>
             </div>
             <div class="sidebar-section">
                 <div class="sidebar-title">小贴士</div>
-                <div class="tip-item"><i class="fas fa-lightbulb"></i><span>使用 <strong style="color: var(--color-primary);">/vector 关键词</strong> 可以搜索向量库中匹配的 JD 数量</span></div>
-                <div class="tip-item"><i class="fas fa-lightbulb"></i><span>输入 <strong style="color: var(--color-primary);">/start</strong> 后，Agent 会根据简历自动提问</span></div>
+                <div class="tip-item"><i class="fas fa-lightbulb"></i><span>使用 <strong
+                            style="color: var(--color-primary);">/vector 关键词</strong> 可以搜索向量库中匹配的 JD 数量</span></div>
+                <div class="tip-item"><i class="fas fa-lightbulb"></i><span>输入 <strong
+                            style="color: var(--color-primary);">/start</strong> 后，Agent 会根据简历自动提问</span></div>
                 <div class="tip-item"><i class="fas fa-lightbulb"></i><span>点击右上角「帮助文档」查看所有可用命令</span></div>
             </div>
         </aside>
@@ -262,15 +991,21 @@
         <main class="main">
             <div class="top-bar">
                 <div class="top-bar-left"><i class="fas fa-robot"></i><span id="topBarTitle">面试 Agent 对话</span></div>
-                <button class="help-button" id="helpBtn" disabled><i class="fas fa-question-circle"></i><span>帮助文档</span></button>
+                <button class="help-button" id="helpBtn" disabled><i
+                        class="fas fa-question-circle"></i><span>帮助文档</span></button>
             </div>
             <div class="chat-container">
                 <div class="chat-messages" id="chatMessages">
-                    <div class="message agent"><div class="message-header"><i class="fas fa-robot"></i> Agent</div><div class="message-content">请先登录或使用新用户注册，以开始与面试 Agent 对话。<br><span style="font-size: 12px; color: var(--color-mute);">点击右上角的弹出框进行身份验证</span></div></div>
+                    <div class="message agent">
+                        <div class="message-header"><i class="fas fa-robot"></i> Agent</div>
+                        <div class="message-content">请先登录或使用新用户注册，以开始与面试 Agent 对话。<br><span
+                                style="font-size: 12px; color: var(--color-mute);">点击右上角的弹出框进行身份验证</span></div>
+                    </div>
                 </div>
                 <div class="chat-input">
                     <textarea id="messageInput" placeholder="输入消息... (Shift+Enter 换行, Enter 发送)" disabled></textarea>
-                    <button id="sendBtn" class="disabled" disabled><i class="fas fa-paper-plane"></i><span>发送</span></button>
+                    <button id="sendBtn" class="disabled" disabled><i
+                            class="fas fa-paper-plane"></i><span>发送</span></button>
                 </div>
                 <div class="status-bar"><span class="dot"></span><span id="statusText">未登录，请先进行身份验证</span></div>
             </div>
@@ -279,14 +1014,28 @@
 
     <div class="modal-overlay" id="helpModal">
         <div class="modal">
-            <div class="modal-header"><h2>可用命令</h2><button class="modal-close" id="closeModal"><i class="fas fa-times"></i></button></div>
+            <div class="modal-header">
+                <h2>可用命令</h2><button class="modal-close" id="closeModal"><i class="fas fa-times"></i></button>
+            </div>
             <div class="modal-body">
-                <div class="command-item"><code>/start</code><p>开始面试流程</p></div>
-                <div class="command-item"><code>/end</code><p>结束面试</p></div>
-                <div class="command-item"><code>/resume</code><p>查看简历内容</p></div>
-                <div class="command-item"><code>/vector 关键词</code><p>查看向量库中相关JD数量</p></div>
-                <div class="command-item"><code>/history</code><p>查看对话历史</p></div>
-                <div class="command-item"><code>/clear</code><p>清空对话历史</p></div>
+                <div class="command-item"><code>/start</code>
+                    <p>开始面试流程</p>
+                </div>
+                <div class="command-item"><code>/end</code>
+                    <p>结束面试</p>
+                </div>
+                <div class="command-item"><code>/resume</code>
+                    <p>查看简历内容</p>
+                </div>
+                <div class="command-item"><code>/vector 关键词</code>
+                    <p>查看向量库中相关JD数量</p>
+                </div>
+                <div class="command-item"><code>/history</code>
+                    <p>查看对话历史</p>
+                </div>
+                <div class="command-item"><code>/clear</code>
+                    <p>清空对话历史</p>
+                </div>
             </div>
         </div>
     </div>
@@ -294,20 +1043,33 @@
     <!-- 用户管理模态框 -->
     <div class="modal-overlay" id="manageUserModal" style="display:none;">
         <div class="modal">
-            <div class="modal-header"><h2>用户管理</h2><button class="modal-close" id="closeManageUserModal"><i class="fas fa-times"></i></button></div>
+            <div class="modal-header">
+                <h2>用户管理</h2><button class="modal-close" id="closeManageUserModal"><i class="fas fa-times"></i></button>
+            </div>
             <div class="modal-body">
-                <div class="form-group"><label class="form-label">用户名</label><div id="manageUsername" style="padding:var(--spacing-md) var(--spacing-lg);background:var(--color-canvas-soft);border:1px solid var(--color-hairline);border-radius:var(--radius-sm);"></div></div>
-                <div class="form-group"><label class="form-label">当前邮箱</label><div id="manageCurrentEmail" style="padding:var(--spacing-md) var(--spacing-lg);background:var(--color-canvas-soft);border:1px solid var(--color-hairline);border-radius:var(--radius-sm);"></div></div>
+                <div class="form-group"><label class="form-label">用户名</label>
+                    <div id="manageUsername"
+                        style="padding:var(--spacing-md) var(--spacing-lg);background:var(--color-canvas-soft);border:1px solid var(--color-hairline);border-radius:var(--radius-sm);">
+                    </div>
+                </div>
+                <div class="form-group"><label class="form-label">当前邮箱</label>
+                    <div id="manageCurrentEmail"
+                        style="padding:var(--spacing-md) var(--spacing-lg);background:var(--color-canvas-soft);border:1px solid var(--color-hairline);border-radius:var(--radius-sm);">
+                    </div>
+                </div>
                 <hr style="border:0;border-top:1px solid var(--color-hairline);margin:var(--spacing-lg) 0;">
                 <h3>修改邮箱</h3>
-                <div class="form-group"><label class="form-label">新邮箱</label><input type="email" id="newEmail" class="form-input" placeholder="请输入新邮箱"></div>
+                <div class="form-group"><label class="form-label">新邮箱</label><input type="email" id="newEmail"
+                        class="form-input" placeholder="请输入新邮箱"></div>
                 <div class="form-actions"><button class="btn btn-primary" id="saveEmailBtn">保存</button></div>
                 <div class="error-message" id="emailError"></div>
 
                 <hr style="border:0;border-top:1px solid var(--color-hairline);margin:var(--spacing-lg) 0;">
                 <h3>修改密码</h3>
-                <div class="form-group"><label class="form-label">旧密码</label><input type="password" id="oldPassword" class="form-input" placeholder="请输入旧密码"></div>
-                <div class="form-group"><label class="form-label">新密码</label><input type="password" id="newPassword" class="form-input" placeholder="请输入新密码（至少8位）"></div>
+                <div class="form-group"><label class="form-label">旧密码</label><input type="password" id="oldPassword"
+                        class="form-input" placeholder="请输入旧密码"></div>
+                <div class="form-group"><label class="form-label">新密码</label><input type="password" id="newPassword"
+                        class="form-input" placeholder="请输入新密码（至少8位）"></div>
                 <div class="form-actions"><button class="btn btn-primary" id="savePasswordBtn">修改密码</button></div>
                 <div class="error-message" id="passwordError"></div>
             </div>
@@ -317,15 +1079,20 @@
     <!-- 上传简历模态框 -->
     <div class="modal-overlay" id="uploadResumeModal" style="display:none;">
         <div class="modal">
-            <div class="modal-header"><h2>上传简历</h2><button class="modal-close" id="closeUploadModal"><i class="fas fa-times"></i></button></div>
+            <div class="modal-header">
+                <h2>上传简历</h2><button class="modal-close" id="closeUploadModal"><i class="fas fa-times"></i></button>
+            </div>
             <div class="modal-body">
                 <p style="margin-top:0;color:var(--color-body)">支持 PDF 和 DOCX 格式，每个用户最多保存 3 份简历</p>
                 <div class="form-group" style="margin-bottom:16px">
                     <label class="form-label">选择文件</label>
-                    <input type="file" id="resumeFileInput" accept=".pdf,.docx" style="display:block;width:100%;padding:10px;background:var(--color-canvas-soft);border:1px solid var(--color-hairline);border-radius:var(--radius-sm);color:var(--color-ink);font-size:14px">
+                    <input type="file" id="resumeFileInput" accept=".pdf,.docx"
+                        style="display:block;width:100%;padding:10px;background:var(--color-canvas-soft);border:1px solid var(--color-hairline);border-radius:var(--radius-sm);color:var(--color-ink);font-size:14px">
                 </div>
-                <div id="uploadStatus" style="color:var(--color-mute);font-size:13px;margin-bottom:10px;min-height:20px"></div>
-                <div class="form-actions"><button class="btn btn-primary" id="startUploadBtn"><i class="fas fa-upload"></i> 上传</button></div>
+                <div id="uploadStatus"
+                    style="color:var(--color-mute);font-size:13px;margin-bottom:10px;min-height:20px"></div>
+                <div class="form-actions"><button class="btn btn-primary" id="startUploadBtn"><i
+                            class="fas fa-upload"></i> 上传</button></div>
                 <div class="error-message" id="uploadError"></div>
             </div>
         </div>
@@ -333,7 +1100,10 @@
     <!-- 管理简历模态框 -->
     <div class="modal-overlay" id="manageResumeModal" style="display:none;">
         <div class="modal">
-            <div class="modal-header"><h2>管理简历</h2><button class="modal-close" id="closeManageResumeModal"><i class="fas fa-times"></i></button></div>
+            <div class="modal-header">
+                <h2>管理简历</h2><button class="modal-close" id="closeManageResumeModal"><i
+                        class="fas fa-times"></i></button>
+            </div>
             <div class="modal-body">
                 <div id="resumeListContainer">
                     <p style="color:var(--color-body)">加载中...</p>
@@ -342,7 +1112,7 @@
         </div>
     </div>
     <script>
-        (function() {
+        (function () {
             var sessionId = "", userId = "", isTyping = false, isAuthenticated = false;
             var messageInput = document.getElementById("messageInput"), sendBtn = document.getElementById("sendBtn"), chatMessages = document.getElementById("chatMessages"), statusText = document.getElementById("statusText"), helpBtn = document.getElementById("helpBtn"), helpModal = document.getElementById("helpModal"), closeModal = document.getElementById("closeModal"), sessionDot = document.getElementById("sessionDot"), sessionIdDisplay = document.getElementById("sessionIdDisplay"), userIdDisplay = document.getElementById("userIdInput");
             var UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
@@ -368,25 +1138,26 @@
             }
 
             function enableInterface() {
-    messageInput.disabled = false;
-    sendBtn.disabled = false;
-    sendBtn.classList.remove('disabled');
-    var actionItems = document.querySelectorAll(".action-item");
-    for (var i = 0; i < actionItems.length; i++) {
-        actionItems[i].classList.remove("disabled");
-        actionItems[i].style.cursor = "pointer";
-    }
-    if (helpBtn) helpBtn.disabled = false;
-    document.getElementById("topBarTitle").textContent = "Agent 对话 - " + userId;
-    // 添加：如果尚未添加用户信息区，则添加
-    if (!document.getElementById('userInfoArea')) {
-        addUserInfoArea();
-    }
-    // 添加欢迎消息
-    addWelcomeMessage();
-}
+                messageInput.disabled = false;
+                sendBtn.disabled = false;
+                sendBtn.classList.remove('disabled');
+                var actionItems = document.querySelectorAll(".action-item");
+                for (var i = 0; i < actionItems.length; i++) {
+                    actionItems[i].classList.remove("disabled");
+                    actionItems[i].style.cursor = "pointer";
+                }
+                if (helpBtn) helpBtn.disabled = false;
+                document.getElementById("topBarTitle").textContent = "Agent 对话 - " + userId;
+                // 添加：如果尚未添加用户信息区，则添加
+                if (!document.getElementById('userInfoArea')) {
+                    addUserInfoArea();
+                }
+                // 添加欢迎消息
+                addWelcomeMessage();
+            }
 
-            function disableInterface() { messageInput.disabled = true; sendBtn.disabled = true; sendBtn.classList.add('disabled');
+            function disableInterface() {
+                messageInput.disabled = true; sendBtn.disabled = true; sendBtn.classList.add('disabled');
                 var actionItems = document.querySelectorAll(".action-item"); for (var i = 0; i < actionItems.length; i++) { actionItems[i].classList.add("disabled"); actionItems[i].style.cursor = "not-allowed"; }
                 if (helpBtn) helpBtn.disabled = true;
             }
@@ -439,8 +1210,8 @@
                 // 获取并显示用户信息（仅更新顶部栏的显示，并缓存数据）
                 if (userId) {
                     fetch("/api/auth/me?user_id=" + userId)
-                        .then(function(resp) { return resp.json(); })
-                        .then(function(data) {
+                        .then(function (resp) { return resp.json(); })
+                        .then(function (data) {
                             if (data.userId) {
                                 document.getElementById('userInfo').textContent = "用户: " + data.username;
                                 // 缓存用户数据供后续使用
@@ -450,25 +1221,25 @@
                                 };
                             }
                         })
-                        .catch(function(err) { console.error("获取用户信息失败:", err); });
+                        .catch(function (err) { console.error("获取用户信息失败:", err); });
                 }
 
                 // 绑定用户管理按钮事件
-                manageBtn.addEventListener('click', function() {
+                manageBtn.addEventListener('click', function () {
                     if (!isAuthenticated) return;
                     loadUserInfo();
                     document.getElementById('manageUserModal').style.display = 'flex';
                 });
 
                 // 绑定退出按钮事件
-                logoutBtn.addEventListener('click', function() {
+                logoutBtn.addEventListener('click', function () {
                     if (confirm('确定要退出登录吗？')) {
                         fetch("/api/auth/logout", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ user_id: userId }) })
-                            .then(function() {
+                            .then(function () {
                                 // 统一使用 logout 函数处理状态重置
                                 logout();
                             })
-                            .catch(function() { location.reload(); });
+                            .catch(function () { location.reload(); });
                     }
                 });
             }
@@ -478,9 +1249,9 @@
                 else { statusText.textContent = isAuthenticated ? "Agent 就绪" : "Agent 就绪"; document.getElementById("sessionStatusText").textContent = isAuthenticated ? "Agent 就绪" : "Agent 就绪"; sessionDot.classList.remove("terminated"); }
             }
 
-            function checkSession() { fetch("/api/sessions/" + sessionId + "/status").then(function(resp) { if (resp.ok) return resp.json(); throw new Error("Status " + resp.status); }).then(function(data) { updateSessionStatus(data.status === "terminated"); }).catch(function(err) { console.error("会话检查失败:", err); }); }
+            function checkSession() { fetch("/api/sessions/" + sessionId + "/status").then(function (resp) { if (resp.ok) return resp.json(); throw new Error("Status " + resp.status); }).then(function (data) { updateSessionStatus(data.status === "terminated"); }).catch(function (err) { console.error("会话检查失败:", err); }); }
 
-            function sendMessage() { if (!isAuthenticated) return; var message = messageInput.value.trim(); if (!message || isTyping) return; isTyping = true; statusText.textContent = "Agent 正在思考..."; document.getElementById("sessionStatusText").textContent = "思考中..."; addMessage("user", message); showTypingIndicator(); messageInput.value = ""; messageInput.style.height = "auto"; fetch("/api/sessions/" + sessionId + "/chat", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ message: message, user_id: userId }) }).then(function(resp) { return resp.json(); }).then(function(result) { removeTypingIndicator(); addMessage("agent", result.message); updateSessionStatus(false); isTyping = false; }).catch(function(err) { console.error("发送失败:", err); removeTypingIndicator(); addMessage("agent", "[错误] 服务器响应失败，请检查网络连接"); updateSessionStatus(false); isTyping = false; }); }
+            function sendMessage() { if (!isAuthenticated) return; var message = messageInput.value.trim(); if (!message || isTyping) return; isTyping = true; statusText.textContent = "Agent 正在思考..."; document.getElementById("sessionStatusText").textContent = "思考中..."; addMessage("user", message); showTypingIndicator(); messageInput.value = ""; messageInput.style.height = "auto"; fetch("/api/sessions/" + sessionId + "/chat", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ message: message, user_id: userId }) }).then(function (resp) { return resp.json(); }).then(function (result) { removeTypingIndicator(); addMessage("agent", result.message); updateSessionStatus(false); isTyping = false; }).catch(function (err) { console.error("发送失败:", err); removeTypingIndicator(); addMessage("agent", "[错误] 服务器响应失败，请检查网络连接"); updateSessionStatus(false); isTyping = false; }); }
 
             function addMessage(role, content) { var messageDiv = document.createElement("div"); messageDiv.className = "message " + role; var header = role === "user" ? "你" : "Agent"; var icon = role === "user" ? "fas fa-user" : "fas fa-robot"; var escapedContent = escapeHtml(content); messageDiv.innerHTML = '<div class="message-header"><i class="' + icon + '"></i>' + header + '</div><div class="message-content">' + escapedContent + '</div>'; if (chatMessages.children.length === 1) { var firstAgentMsg = chatMessages.querySelector(".message.agent"); if (firstAgentMsg && firstAgentMsg.textContent.indexOf("开始与面试") >= 0) { chatMessages.innerHTML = ""; } } chatMessages.appendChild(messageDiv); chatMessages.scrollTop = chatMessages.scrollHeight; }
 
@@ -488,269 +1259,322 @@
             function removeTypingIndicator() { var indicator = document.getElementById("typingIndicator"); if (indicator) indicator.remove(); }
             function escapeHtml(text) { return text.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&#34;").replace(/'/g, "&#39;"); }
 
-            function login(username, password, callback) { if (!username || !password) { callback(null, "用户名和密码不能为空"); return; } fetch("/api/auth/login", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ username: username, password: password }) }).then(function(resp) { if (resp.ok) return resp.json(); throw new Error("Status " + resp.status); }).then(function(data) { if (data.success) { saveUserId(data.userId); userId = data.userId; callback(data, null); } else { callback(null, data.message || "登录失败"); } }).catch(function(err) { callback(null, "网络错误，请稍后重试"); }); }
-            function logout() {
-    clearUserId();
-    userId = "";
-    isAuthenticated = false;
-    disableInterface();
-    updateStatus("已退出登录");
-    showLoginModal();
-    checkSession();
-    document.getElementById("topBarTitle").textContent = "面试 Agent 对话";
-    // 移除用户信息区，以便重新加载
-    var userInfoArea = document.getElementById('userInfoArea');
-    if (userInfoArea) userInfoArea.remove();
-}
-            function register(username, email, password, callback) { if (!username || !email || !password) { callback(null, "所有字段都是必填的"); return; } fetch("/api/auth/register", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ username: username, email: email, password: password }) }).then(function(resp) { if (resp.ok) return resp.json(); throw new Error("Status " + resp.status); }).then(function(data) { if (data.success) { saveUserId(data.userId); userId = data.userId; callback(data, null); } else { callback(null, data.message || "注册失败"); } }).catch(function(err) { callback(null, "网络错误，请稍后重试"); }); }
-            function checkAvailable(field, value, callback) { var fieldMap = { "username": "username", "email": "email" }; var fieldName = fieldMap[field]; if (!fieldName) { callback(false, "无效的字段"); return; } fetch("/api/auth/check?field=" + encodeURIComponent(fieldName) + "&value=" + encodeURIComponent(value), { method: "GET" }).then(function(resp) { if (resp.ok) return resp.json(); throw new Error("Status " + resp.status); }).then(function(data) { callback(data.available, data.message || ""); }).catch(function(err) { callback(false, "检查失败，请稍后重试"); }); }
-
-            // 修复：页面加载时若已登录，隐藏登录模态框
-            var lm = document.getElementById('loginModal'); var rm = document.getElementById('registerModal'); if (lm && userId) lm.classList.remove('active'); if (rm) rm.classList.remove('active');
-            checkAuthStatus();
-
-messageInput.addEventListener("keydown", function(e) { if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); sendMessage(); } });
-            messageInput.addEventListener("input", function() { this.style.height = "auto"; this.style.height = Math.min(this.scrollHeight, 100) + "px"; });
-            sendBtn.addEventListener("click", sendMessage);
-
-            var actionItems = document.querySelectorAll(".action-item");
-            for (var i = 0; i < actionItems.length; i++) { actionItems[i].addEventListener("click", function(e) { if (this.classList.contains("disabled")) return; var cmd = this.getAttribute("data-command"); messageInput.value = cmd; sendMessage(); }); }
-
-            helpBtn.addEventListener("click", function() { helpModal.classList.add("active"); });
-            closeModal.addEventListener("click", function() { helpModal.classList.remove("active"); });
-            helpModal.addEventListener("click", function(e) { if (e.target === helpModal) { helpModal.classList.remove("active"); } });
-
-            var loginModal = document.getElementById("loginModal"), registerModal = document.getElementById("registerModal"), loginForm = document.getElementById("loginForm"), registerForm = document.getElementById("registerForm"), showRegisterLink = document.getElementById("showRegisterLink"), backToLoginBtn = document.getElementById("backToLoginBtn"), loginErrorMessage = document.getElementById("loginErrorMessage"), registerErrorMessage = document.getElementById("registerErrorMessage"), registerSuccessMessage = document.getElementById("registerSuccessMessage"), emailError = document.getElementById("emailError"), passwordError = document.getElementById("passwordError");
-
-            function showError(element, message) { element.textContent = message; element.classList.add("show"); }
-            function hideError(element) { element.classList.remove("show"); }
-            function showSuccess(element) { element.classList.add("show"); }
-            function hideSuccess(element) { element.classList.remove("show"); }
-            function showLoginModal() { if (loginModal) loginModal.classList.add("active"); }
-
-            showRegisterLink.addEventListener("click", function(e) { e.preventDefault(); loginModal.classList.remove("active"); registerModal.classList.add("active"); hideError(loginErrorMessage); hideError(registerErrorMessage); hideSuccess(registerSuccessMessage); document.getElementById("regUsername").value = ""; document.getElementById("regEmail").value = ""; document.getElementById("regPassword").value = ""; });
-            backToLoginBtn.addEventListener("click", function(e) { e.preventDefault(); registerModal.classList.remove("active"); loginModal.classList.add("active"); hideError(registerErrorMessage); hideSuccess(registerSuccessMessage); });
-
-            function closeModalAndReset(modal) { modal.classList.remove("active"); hideError(loginErrorMessage); checkAuthStatus(); }
-
-            loginForm.addEventListener("submit", function(e) { e.preventDefault(); var username = document.getElementById("loginUsername").value.trim(), password = document.getElementById("loginPassword").value; hideError(loginErrorMessage); login(username, password, function(data, error) { if (error) { showError(loginErrorMessage, error); } else { alert("登录成功！欢迎回来，" + username + "！"); closeModalAndReset(loginModal); } }); });
-
-            registerForm.addEventListener("submit", function(e) { e.preventDefault(); var username = document.getElementById("regUsername").value.trim(), email = document.getElementById("regEmail").value.trim(), password = document.getElementById("regPassword").value; hideError(registerErrorMessage); hideSuccess(registerSuccessMessage); if (password.length < 8) { showError(registerErrorMessage, "密码长度至少为8位"); return; } checkAvailable("username", username, function(available, msg) { if (!available) { showError(registerErrorMessage, msg || "用户名已被占用"); return; } checkAvailable("email", email, function(available, msg) { if (!available) { showError(registerErrorMessage, msg || "该邮箱已被注册"); return; } register(username, email, password, function(data, error) { if (error) { showError(registerErrorMessage, error); } else { showSuccess(registerSuccessMessage); setTimeout(function() { registerSuccessMessage.classList.remove("show"); }, 3000); checkAuthStatus(); closeModalAndReset(registerModal); } }); }); }); });
-
-            helpModal.addEventListener("click", function(e) { if (e.target === helpModal) { helpModal.classList.remove("active"); } });
-
-            // ===== 上传简历功能 =====
-            var uploadResumeBtn = document.getElementById("uploadResumeBtn");
-            var manageResumeBtn = document.getElementById("manageResumeBtn");
-            var uploadModal = document.getElementById("uploadResumeModal");
-            var manageModal = document.getElementById("manageResumeModal");
-            var closeUpload = document.getElementById("closeUploadModal");
-            var closeManage = document.getElementById("closeManageResumeModal");
-            var resumeFileInput = document.getElementById("resumeFileInput");
-            var startUploadBtn = document.getElementById("startUploadBtn");
-            var uploadStatus = document.getElementById("uploadStatus");
-            var uploadError = document.getElementById("uploadError");
-            var resumeListContainer = document.getElementById("resumeListContainer");
-
-            // 打开上传模态框
-            var isUploading = false;
-            if (uploadResumeBtn) uploadResumeBtn.addEventListener("click", function() {
-                if (this.classList.contains("disabled")) return;
-                uploadModal.style.display = "flex";
-                resumeFileInput.value = "";
-                uploadStatus.textContent = "";
-                uploadError.classList.remove("show");
-            });
-            if (closeUpload) closeUpload.addEventListener("click", function() { if (!isUploading) uploadModal.style.display = "none"; });
-            if (uploadModal) uploadModal.addEventListener("click", function(e) { if (e.target === this && !isUploading) this.style.display = "none"; });
-
-            // 执行文件上传
-            function uploadFile() {
-                var file = resumeFileInput ? resumeFileInput.files[0] : null;
-                if (!file) { showError(uploadError, "请先选择一个文件"); return; }
-                var ext = file.name.split(".").pop().toLowerCase();
-                if (ext !== "pdf" && ext !== "docx") { showError(uploadError, "仅支持 .pdf 和 .docx 格式"); return; }
-                if (file.size > 10 * 1024 * 1024) { showError(uploadError, "文件大小不能超过 10MB"); return; }
-                hideError(uploadError);
-                isUploading = true;
-                uploadStatus.innerHTML = '<i class="fas fa-spinner fa-spin"></i> 上传中...';
-                startUploadBtn.disabled = true;
-                resumeFileInput.disabled = true;
-                closeUpload.style.opacity = "0.4";
-                closeUpload.style.pointerEvents = "none";
-                var formData = new FormData();
-                formData.append("file", file);
-                fetch("/api/resume/upload?user_id=" + userId + "&session_id=" + sessionId, { method: "PUT", body: formData })
-                    .then(function(resp) { return resp.json(); })
-                    .then(function(data) {
-                        isUploading = false;
-                        startUploadBtn.disabled = false;
-                        resumeFileInput.disabled = false;
-                        closeUpload.style.opacity = "1";
-                        closeUpload.style.pointerEvents = "auto";
-                        if (data.success) {
-                            uploadStatus.innerHTML = '上传成功: ' + data.filename;
-                            uploadModal.style.display = "none";
-                            addMessage("agent", "简历 \"" + data.filename + "\" 上传成功！您可以输入 /start 开始面试了。");
-                        } else { showError(uploadError, data.message || "上传失败"); }
-                    })
-                    .catch(function(err) {
-                        isUploading = false;
-                        startUploadBtn.disabled = false;
-                        resumeFileInput.disabled = false;
-                        closeUpload.style.opacity = "1";
-                        closeUpload.style.pointerEvents = "auto";
-                        uploadStatus.textContent = "";
-                        showError(uploadError, "网络错误，请重试");
-                    });
-            }
-            if (startUploadBtn) startUploadBtn.addEventListener("click", uploadFile);
-
-            // 打开管理简历模态框
-            if (manageResumeBtn) manageResumeBtn.addEventListener("click", function() {
-                if (this.classList.contains("disabled")) return;
-                loadResumeList();
-                manageModal.style.display = "flex";
-            });
-            if (closeManage) closeManage.addEventListener("click", function() { manageModal.style.display = "none"; });
-            if (manageModal) manageModal.addEventListener("click", function(e) { if (e.target === this) this.style.display = "none"; });
-
-            // 加载简历列表
-            function loadResumeList() {
-                if (!resumeListContainer) return;
-                resumeListContainer.innerHTML = "<p style='color:var(--color-body)'>加载中...</p>";
-                fetch("/api/resume/list?user_id=" + userId)
-                    .then(function(resp) { return resp.json(); })
-                    .then(function(data) {
-                        if (data.success && data.count > 0) {
-                            var html = "";
-                            for (var i = 0; i < data.resumes.length; i++) {
-                                var r = data.resumes[i];
-                                var timeStr = r.uploaded_at || "N/A";
-                                var isActive = r.is_active === 1;
-                                var borderStyle = isActive ? "border:2px solid var(--color-primary)" : "border:1px solid var(--color-hairline)";
-                                html += "<div style='background:var(--color-canvas-soft);" + borderStyle + ";border-radius:var(--radius-md);padding:var(--spacing-md);margin-bottom:var(--spacing-md)'>"
-                                    + "<div style='display:flex;align-items:center;justify-content:space-between'>"
-                                    + "<div><div style='font-size:14px;font-weight:500;color:var(--color-ink)'>" + (isActive ? "<span style='color:var(--color-primary);margin-right:6px'>&#9679;</span>" : "<span style='color:var(--color-mute);margin-right:6px'>&#9675;</span>") + r.filename + "</div>"
-                                    + "<div style='font-size:12px;color:var(--color-mute);margin-top:4px'>上传时间: " + timeStr + "</div></div>"
-                                    + "<div style='display:flex;gap:6px'>"
-                                    + (isActive ? "<span style='padding:4px 8px;font-size:11px;border-radius:var(--radius-sm);background:var(--color-primary);color:var(--color-on-primary);border:none'>使用中</span>"
-                                        : "<button class='btn-activate' data-resume-id='" + r.id + "' style='padding:6px 12px;font-size:12px;border:none;border-radius:var(--radius-sm);background:var(--color-primary);color:var(--color-on-primary);cursor:pointer'><i class='fas fa-check'></i> 激活</button>")
-                                    + "<button class='btn btn-danger' data-resume-id='" + r.id + "' style='padding:6px 12px;font-size:12px;border:none;border-radius:var(--radius-sm);background:#e74c3c;color:#fff;cursor:pointer'><i class='fas fa-trash'></i> 删除</button>"
-                                    + "</div></div></div>";
-                            }
-                            resumeListContainer.innerHTML = html;
-                            // 绑定激活事件
-                            var activateBtns = resumeListContainer.querySelectorAll(".btn-activate");
-                            for (var a = 0; a < activateBtns.length; a++) {
-                                activateBtns[a].addEventListener("click", function() {
-                                    var rid = this.getAttribute("data-resume-id");
-                                    fetch("/api/resume/" + rid + "/activate?session_id=" + sessionId, { method: "PUT" })
-                                        .then(function(resp) { return resp.json(); })
-                                        .then(function(data) { if (data.success) loadResumeList(); else alert(data.message || "激活失败"); })
-                                        .catch(function() { alert("网络错误"); });
-                                });
-                            }
-                            // 绑定删除事件
-                            var deleteBtns = resumeListContainer.querySelectorAll(".btn-danger");
-                            for (var j = 0; j < deleteBtns.length; j++) {
-                                deleteBtns[j].addEventListener("click", function() {
-                                    if (confirm("确定要删除这份简历吗？")) {
-                                        var rid = this.getAttribute("data-resume-id");
-                                        fetch("/api/resume/" + rid, { method: "DELETE" })
-                                            .then(function(resp) { return resp.json(); })
-                                            .then(function(data) { if (data.success) loadResumeList(); else alert(data.message || "删除失败"); })
-                                            .catch(function() { alert("网络错误"); });
-                                    }
-                                });
-                            }
-                        } else if (data.success && data.count === 0) {
-                            resumeListContainer.innerHTML = "<p style='color:var(--color-body)'>暂无已上传的简历</p>";
-                        } else {
-                            resumeListContainer.innerHTML = "<p style='color:var(--color-body)'>加载失败</p>";
-                        }
-                    })
-                    .catch(function() { resumeListContainer.innerHTML = "<p style='color:var(--color-body)'>网络错误</p>"; });
-            }
-
-            checkSession();
-
-            // ===== 用户管理功能 =====
-            // 获取当前用户信息
-            function loadUserInfo() {
-                if (!userId) return;
-                // 先检查是否有缓存数据
-                if (window._currentUserData) {
-                    document.getElementById('manageUsername').textContent = window._currentUserData.username;
-                    document.getElementById('manageCurrentEmail').textContent = window._currentUserData.email || '未设置';
+            function login(username, password, callback) {
+                if (!username || !password) {
+                    callback(null, "用户名和密码不能为空");
                     return;
                 }
-                // 如果没有缓存，则从 API 获取
-                fetch("/api/auth/me?user_id=" + userId)
-                    .then(function(resp) { return resp.json(); })
-                    .then(function(data) {
-                        if (data.userId) {
-                            // 缓存数据
-                            window._currentUserData = {
-                                username: data.username,
-                                email: data.email
-                            };
-                            document.getElementById('manageUsername').textContent = data.username;
-                            document.getElementById('manageCurrentEmail').textContent = data.email || '未设置';
-                        }
-                    })
-                    .catch(function(err) { console.error("加载用户信息失败:", err); });
+                fetch("/api/auth/login", {
+                    method: "POST",
+                    headers: { "Content-Type": "application/json" },
+                    body: JSON.stringify({ username: username, password: password })
+                })
+                .then(function (resp) {
+                    if (resp.ok) return resp.json();
+                    throw new Error("Status " + resp.status);
+                })
+                .then(function (data) {
+                    if (data.success) {
+                        saveUserId(data.userId);
+                        userId = data.userId;
+                        callback(data, null);
+                    } else {
+                        callback(null, data.message || "登录失败");
+                    }
+                })
+                .catch(function (err) {
+                    callback(null, "网络错误，请稍后重试");
+                });
             }
+                        function logout() {
+                            clearUserId();
+                            userId = "";
+                            isAuthenticated = false;
+                            disableInterface();
+                            updateStatus("已退出登录");
+                            showLoginModal();
+                            checkSession();
+                            document.getElementById("topBarTitle").textContent = "面试 Agent 对话";
+                            // 移除用户信息区，以便重新加载
+                            var userInfoArea = document.getElementById('userInfoArea');
+                            if (userInfoArea) userInfoArea.remove();
+                        }
+                        function register(username, email, password, callback) { if (!username || !email || !password) { callback(null, "所有字段都是必填的"); return; } fetch("/api/auth/register", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ username: username, email: email, password: password }) }).then(function (resp) { if (resp.ok) return resp.json(); throw new Error("Status " + resp.status); }).then(function (data) { if (data.success) { saveUserId(data.userId); userId = data.userId; callback(data, null); } else { callback(null, data.message || "注册失败"); } }).catch(function (err) { callback(null, "网络错误，请稍后重试"); }); }
+                        function checkAvailable(field, value, callback) { var fieldMap = { "username": "username", "email": "email" }; var fieldName = fieldMap[field]; if (!fieldName) { callback(false, "无效的字段"); return; } fetch("/api/auth/check?field=" + encodeURIComponent(fieldName) + "&value=" + encodeURIComponent(value), { method: "GET" }).then(function (resp) { if (resp.ok) return resp.json(); throw new Error("Status " + resp.status); }).then(function (data) { callback(data.available, data.message || ""); }).catch(function (err) { callback(false, "检查失败，请稍后重试"); }); }
 
-            // 关闭用户管理模态框
-            document.getElementById('closeManageUserModal').addEventListener('click', function() {
-                document.getElementById('manageUserModal').style.display = 'none';
-            });
-            document.getElementById('manageUserModal').addEventListener('click', function(e) {
-                if (e.target === this) this.style.display = 'none';
-            });
+                        // 修复：页面加载时若已登录，隐藏登录模态框
+                        var lm = document.getElementById('loginModal'); var rm = document.getElementById('registerModal'); if (lm && userId) lm.classList.remove('active'); if (rm) rm.classList.remove('active');
+                        checkAuthStatus();
 
-            // 保存邮箱
-            document.getElementById('saveEmailBtn').addEventListener('click', function() {
-                var newEmail = document.getElementById('newEmail').value.trim();
-                if (!newEmail) { showError(emailError, '请输入新邮箱'); return; }
-                if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(newEmail)) { showError(emailError, '邮箱格式无效'); return; }
-                hideError(emailError);
-                fetch("/api/auth/user/email", {
-                    method: "PUT",
-                    headers: { "Content-Type": "application/json" },
-                    body: JSON.stringify({ user_id: userId, email: newEmail })
-                })
-                .then(function(resp) { return resp.json(); })
-                .then(function(data) {
-                    if (data.success) { alert('邮箱修改成功！'); window._currentUserData = null; loadUserInfo(); document.getElementById('newEmail').value = ''; }
-                    else { showError(emailError, data.message || '修改失败'); }
-                })
-                .catch(function() { showError(emailError, '网络错误'); });
-            });
+                        messageInput.addEventListener("keydown", function (e) { if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); sendMessage(); } });
+                        messageInput.addEventListener("input", function () { this.style.height = "auto"; this.style.height = Math.min(this.scrollHeight, 100) + "px"; });
+                        sendBtn.addEventListener("click", sendMessage);
 
-            // 保存密码
-            document.getElementById('savePasswordBtn').addEventListener('click', function() {
-                var oldPwd = document.getElementById('oldPassword').value, newPwd = document.getElementById('newPassword').value;
-                if (!oldPwd || !newPwd) { showError(passwordError, '所有字段必填'); return; }
-                if (newPwd.length < 8) { showError(passwordError, '新密码至少8位'); return; }
-                hideError(passwordError);
-                fetch("/api/auth/user/password", {
-                    method: "PUT",
-                    headers: { "Content-Type": "application/json" },
-                    body: JSON.stringify({ user_id: userId, old_password: oldPwd, new_password: newPwd })
-                })
-                .then(function(resp) { return resp.json(); })
-                .then(function(data) {
-                    if (data.success) { alert('密码修改成功！请重新登录。'); location.reload(); }
-                    else { showError(passwordError, data.message || '修改失败'); }
-                })
-                .catch(function() { showError(passwordError, '网络错误'); });
-            });
+                        var actionItems = document.querySelectorAll(".action-item");
+                        for (var i = 0; i < actionItems.length; i++) { actionItems[i].addEventListener("click", function (e) { if (this.classList.contains("disabled")) return; var cmd = this.getAttribute("data-command"); messageInput.value = cmd; sendMessage(); }); }
 
-            // 初始化：如果已登录，加载用户信息
-            if (isAuthenticated) loadUserInfo();
-        })();
-    </script>
+                        helpBtn.addEventListener("click", function () { helpModal.classList.add("active"); });
+                        closeModal.addEventListener("click", function () { helpModal.classList.remove("active"); });
+                        helpModal.addEventListener("click", function (e) { if (e.target === helpModal) { helpModal.classList.remove("active"); } });
+
+                        var loginModal = document.getElementById("loginModal"), registerModal = document.getElementById("registerModal"), loginForm = document.getElementById("loginForm"), registerForm = document.getElementById("registerForm"), showRegisterLink = document.getElementById("showRegisterLink"), backToLoginBtn = document.getElementById("backToLoginBtn"), loginErrorMessage = document.getElementById("loginErrorMessage"), registerErrorMessage = document.getElementById("registerErrorMessage"), registerSuccessMessage = document.getElementById("registerSuccessMessage"), emailError = document.getElementById("emailError"), passwordError = document.getElementById("passwordError");
+
+                        function showError(element, message) { element.textContent = message; element.classList.add("show"); }
+                        function hideError(element) { element.classList.remove("show"); }
+                        function showSuccess(element) { element.classList.add("show"); }
+                        function hideSuccess(element) { element.classList.remove("show"); }
+                        function showLoginModal() { if (loginModal) loginModal.classList.add("active"); }
+
+                        showRegisterLink.addEventListener("click", function (e) { e.preventDefault(); loginModal.classList.remove("active"); registerModal.classList.add("active"); hideError(loginErrorMessage); hideError(registerErrorMessage); hideSuccess(registerSuccessMessage); document.getElementById("regUsername").value = ""; document.getElementById("regEmail").value = ""; document.getElementById("regPassword").value = ""; });
+                        backToLoginBtn.addEventListener("click", function (e) { e.preventDefault(); registerModal.classList.remove("active"); loginModal.classList.add("active"); hideError(registerErrorMessage); hideSuccess(registerSuccessMessage); });
+
+                        function closeModalAndReset(modal) { modal.classList.remove("active"); hideError(loginErrorMessage); checkAuthStatus(); }
+
+                        loginForm.addEventListener("submit", function (e) {
+                            e.preventDefault();
+                            var username = document.getElementById("loginUsername").value.trim(), password = document.getElementById("loginPassword").value;
+                            hideError(loginErrorMessage);
+                            login(username, password, function (data, error) {
+                                if (error) {
+                                    showError(loginErrorMessage, error);
+                                } else {
+                                    // 将 user_id 关联到当前会话
+                                    var sessId = document.getElementById("sessionIdInput").value;
+                                    if (sessId) {
+                                        fetch("/api/sessions/" + sessId + "/user", {
+                                            method: "PUT",
+                                            headers: { "Content-Type": "application/json" },
+                                            body: JSON.stringify({ user_id: data.userId })
+                                        }).catch(function (err) { console.error("设置会话用户失败:", err); });
+                                    }
+                                    alert("登录成功！欢迎回来，" + username + "！");
+                                    closeModalAndReset(loginModal);
+                                }
+                            });
+                        });
+
+                        registerForm.addEventListener("submit", function (e) { e.preventDefault(); var username = document.getElementById("regUsername").value.trim(), email = document.getElementById("regEmail").value.trim(), password = document.getElementById("regPassword").value; hideError(registerErrorMessage); hideSuccess(registerSuccessMessage); if (password.length < 8) { showError(registerErrorMessage, "密码长度至少为8位"); return; } checkAvailable("username", username, function (available, msg) { if (!available) { showError(registerErrorMessage, msg || "用户名已被占用"); return; } checkAvailable("email", email, function (available, msg) { if (!available) { showError(registerErrorMessage, msg || "该邮箱已被注册"); return; } register(username, email, password, function (data, error) { if (error) { showError(registerErrorMessage, error); } else { showSuccess(registerSuccessMessage); setTimeout(function () { registerSuccessMessage.classList.remove("show"); }, 3000); checkAuthStatus(); closeModalAndReset(registerModal); } }); }); }); });
+
+                        helpModal.addEventListener("click", function (e) { if (e.target === helpModal) { helpModal.classList.remove("active"); } });
+
+                        // ===== 上传简历功能 =====
+                        var uploadResumeBtn = document.getElementById("uploadResumeBtn");
+                        var manageResumeBtn = document.getElementById("manageResumeBtn");
+                        var uploadModal = document.getElementById("uploadResumeModal");
+                        var manageModal = document.getElementById("manageResumeModal");
+                        var closeUpload = document.getElementById("closeUploadModal");
+                        var closeManage = document.getElementById("closeManageResumeModal");
+                        var resumeFileInput = document.getElementById("resumeFileInput");
+                        var startUploadBtn = document.getElementById("startUploadBtn");
+                        var uploadStatus = document.getElementById("uploadStatus");
+                        var uploadError = document.getElementById("uploadError");
+                        var resumeListContainer = document.getElementById("resumeListContainer");
+
+                        // 打开上传模态框
+                        var isUploading = false;
+                        if (uploadResumeBtn) uploadResumeBtn.addEventListener("click", function () {
+                            if (this.classList.contains("disabled")) return;
+                            uploadModal.style.display = "flex";
+                            resumeFileInput.value = "";
+                            uploadStatus.textContent = "";
+                            uploadError.classList.remove("show");
+                        });
+                        if (closeUpload) closeUpload.addEventListener("click", function () { if (!isUploading) uploadModal.style.display = "none"; });
+                        if (uploadModal) uploadModal.addEventListener("click", function (e) { if (e.target === this && !isUploading) this.style.display = "none"; });
+
+                        // 执行文件上传
+                        function uploadFile() {
+                            var file = resumeFileInput ? resumeFileInput.files[0] : null;
+                            if (!file) { showError(uploadError, "请先选择一个文件"); return; }
+                            var ext = file.name.split(".").pop().toLowerCase();
+                            if (ext !== "pdf" && ext !== "docx") { showError(uploadError, "仅支持 .pdf 和 .docx 格式"); return; }
+                            if (file.size > 10 * 1024 * 1024) { showError(uploadError, "文件大小不能超过 10MB"); return; }
+                            hideError(uploadError);
+                            isUploading = true;
+                            uploadStatus.innerHTML = '<i class="fas fa-spinner fa-spin"></i> 上传中...';
+                            startUploadBtn.disabled = true;
+                            resumeFileInput.disabled = true;
+                            closeUpload.style.opacity = "0.4";
+                            closeUpload.style.pointerEvents = "none";
+                            var formData = new FormData();
+                            formData.append("file", file);
+                            fetch("/api/resume/upload?user_id=" + userId + "&session_id=" + sessionId, { method: "PUT", body: formData })
+                                .then(function (resp) { return resp.json(); })
+                                .then(function (data) {
+                                    isUploading = false;
+                                    startUploadBtn.disabled = false;
+                                    resumeFileInput.disabled = false;
+                                    closeUpload.style.opacity = "1";
+                                    closeUpload.style.pointerEvents = "auto";
+                                    if (data.success) {
+                                        uploadStatus.innerHTML = '上传成功: ' + data.filename;
+                                        uploadModal.style.display = "none";
+                                        addMessage("agent", "简历 \"" + data.filename + "\" 上传成功！您可以输入 /start 开始面试了。");
+                                    } else {
+                                        // 优先显示后端返回的详细错误信息
+                                        var errorMsg = data.detail || data.message || "上传失败";
+                                        showError(uploadError, errorMsg);
+                                    }
+                                })
+                                .catch(function (err) {
+                                    isUploading = false;
+                                    startUploadBtn.disabled = false;
+                                    resumeFileInput.disabled = false;
+                                    closeUpload.style.opacity = "1";
+                                    closeUpload.style.pointerEvents = "auto";
+                                    uploadStatus.textContent = "";
+                                    showError(uploadError, "网络错误，请重试");
+                                });
+                        }
+                        if (startUploadBtn) startUploadBtn.addEventListener("click", uploadFile);
+
+                        // 打开管理简历模态框
+                        if (manageResumeBtn) manageResumeBtn.addEventListener("click", function () {
+                            if (this.classList.contains("disabled")) return;
+                            loadResumeList();
+                            manageModal.style.display = "flex";
+                        });
+                        if (closeManage) closeManage.addEventListener("click", function () { manageModal.style.display = "none"; });
+                        if (manageModal) manageModal.addEventListener("click", function (e) { if (e.target === this) this.style.display = "none"; });
+
+                        // 加载简历列表
+                        function loadResumeList() {
+                            if (!resumeListContainer) return;
+                            resumeListContainer.innerHTML = "<p style='color:var(--color-body)'>加载中...</p>";
+                            fetch("/api/resume/list?user_id=" + userId)
+                                .then(function (resp) { return resp.json(); })
+                                .then(function (data) {
+                                    if (data.success && data.count > 0) {
+                                        var html = "";
+                                        for (var i = 0; i < data.resumes.length; i++) {
+                                            var r = data.resumes[i];
+                                            var timeStr = r.uploaded_at || "N/A";
+                                            var isActive = r.is_active === 1;
+                                            var borderStyle = isActive ? "border:2px solid var(--color-primary)" : "border:1px solid var(--color-hairline)";
+                                            html += "<div style='background:var(--color-canvas-soft);" + borderStyle + ";border-radius:var(--radius-md);padding:var(--spacing-md);margin-bottom:var(--spacing-md)'>"
+                                                + "<div style='display:flex;align-items:center;justify-content:space-between'>"
+                                                + "<div><div style='font-size:14px;font-weight:500;color:var(--color-ink)'>" + (isActive ? "<span style='color:var(--color-primary);margin-right:6px'>&#9679;</span>" : "<span style='color:var(--color-mute);margin-right:6px'>&#9675;</span>") + r.filename + "</div>"
+                                                + "<div style='font-size:12px;color:var(--color-mute);margin-top:4px'>上传时间: " + timeStr + "</div></div>"
+                                                + "<div style='display:flex;gap:6px'>"
+                                                + (isActive ? "<span style='padding:4px 8px;font-size:11px;border-radius:var(--radius-sm);background:var(--color-primary);color:var(--color-on-primary);border:none'>使用中</span>"
+                                                    : "<button class='btn-activate' data-resume-id='" + r.id + "' style='padding:6px 12px;font-size:12px;border:none;border-radius:var(--radius-sm);background:var(--color-primary);color:var(--color-on-primary);cursor:pointer'><i class='fas fa-check'></i> 激活</button>")
+                                                + "<button class='btn btn-danger' data-resume-id='" + r.id + "' style='padding:6px 12px;font-size:12px;border:none;border-radius:var(--radius-sm);background:#e74c3c;color:#fff;cursor:pointer'><i class='fas fa-trash'></i> 删除</button>"
+                                                + "</div></div></div>";
+                                        }
+                                        resumeListContainer.innerHTML = html;
+                                        // 绑定激活事件
+                                        var activateBtns = resumeListContainer.querySelectorAll(".btn-activate");
+                                        for (var a = 0; a < activateBtns.length; a++) {
+                                            activateBtns[a].addEventListener("click", function () {
+                                                var rid = this.getAttribute("data-resume-id");
+                                                fetch("/api/resume/" + rid + "/activate?session_id=" + sessionId, { method: "PUT" })
+                                                    .then(function (resp) { return resp.json(); })
+                                                    .then(function (data) { if (data.success) loadResumeList(); else alert(data.message || "激活失败"); })
+                                                    .catch(function () { alert("网络错误"); });
+                                            });
+                                        }
+                                        // 绑定删除事件
+                                        var deleteBtns = resumeListContainer.querySelectorAll(".btn-danger");
+                                        for (var j = 0; j < deleteBtns.length; j++) {
+                                            deleteBtns[j].addEventListener("click", function () {
+                                                if (confirm("确定要删除这份简历吗？")) {
+                                                    var rid = this.getAttribute("data-resume-id");
+                                                    fetch("/api/resume/" + rid, { method: "DELETE" })
+                                                        .then(function (resp) { return resp.json(); })
+                                                        .then(function (data) { if (data.success) loadResumeList(); else alert(data.message || "删除失败"); })
+                                                        .catch(function () { alert("网络错误"); });
+                                                }
+                                            });
+                                        }
+                                    } else if (data.success && data.count === 0) {
+                                        resumeListContainer.innerHTML = "<p style='color:var(--color-body)'>暂无已上传的简历</p>";
+                                    } else {
+                                        resumeListContainer.innerHTML = "<p style='color:var(--color-body)'>加载失败</p>";
+                                    }
+                                })
+                                .catch(function () { resumeListContainer.innerHTML = "<p style='color:var(--color-body)'>网络错误</p>"; });
+                        }
+
+                        checkSession();
+
+                        // ===== 用户管理功能 =====
+                        // 获取当前用户信息
+                        function loadUserInfo() {
+                            if (!userId) return;
+                            // 先检查是否有缓存数据
+                            if (window._currentUserData) {
+                                document.getElementById('manageUsername').textContent = window._currentUserData.username;
+                                document.getElementById('manageCurrentEmail').textContent = window._currentUserData.email || '未设置';
+                                return;
+                            }
+                            // 如果没有缓存，则从 API 获取
+                            fetch("/api/auth/me?user_id=" + userId)
+                                .then(function (resp) { return resp.json(); })
+                                .then(function (data) {
+                                    if (data.userId) {
+                                        // 缓存数据
+                                        window._currentUserData = {
+                                            username: data.username,
+                                            email: data.email
+                                        };
+                                        document.getElementById('manageUsername').textContent = data.username;
+                                        document.getElementById('manageCurrentEmail').textContent = data.email || '未设置';
+                                    }
+                                })
+                                .catch(function (err) { console.error("加载用户信息失败:", err); });
+                        }
+
+                        // 关闭用户管理模态框
+                        document.getElementById('closeManageUserModal').addEventListener('click', function () {
+                            document.getElementById('manageUserModal').style.display = 'none';
+                        });
+                        document.getElementById('manageUserModal').addEventListener('click', function (e) {
+                            if (e.target === this) this.style.display = 'none';
+                        });
+
+                        // 保存邮箱
+                        document.getElementById('saveEmailBtn').addEventListener('click', function () {
+                            var newEmail = document.getElementById('newEmail').value.trim();
+                            if (!newEmail) { showError(emailError, '请输入新邮箱'); return; }
+                            if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(newEmail)) { showError(emailError, '邮箱格式无效'); return; }
+                            hideError(emailError);
+                            fetch("/api/auth/user/email", {
+                                method: "PUT",
+                                headers: { "Content-Type": "application/json" },
+                                body: JSON.stringify({ user_id: userId, email: newEmail })
+                            })
+                                .then(function (resp) { return resp.json(); })
+                                .then(function (data) {
+                                    if (data.success) { alert('邮箱修改成功！'); window._currentUserData = null; loadUserInfo(); document.getElementById('newEmail').value = ''; }
+                                    else { showError(emailError, data.message || '修改失败'); }
+                                })
+                                .catch(function () { showError(emailError, '网络错误'); });
+                        });
+
+                        // 保存密码
+                        document.getElementById('savePasswordBtn').addEventListener('click', function () {
+                            var oldPwd = document.getElementById('oldPassword').value, newPwd = document.getElementById('newPassword').value;
+                            if (!oldPwd || !newPwd) { showError(passwordError, '所有字段必填'); return; }
+                            if (newPwd.length < 8) { showError(passwordError, '新密码至少8位'); return; }
+                            hideError(passwordError);
+                            fetch("/api/auth/user/password", {
+                                method: "PUT",
+                                headers: { "Content-Type": "application/json" },
+                                body: JSON.stringify({ user_id: userId, old_password: oldPwd, new_password: newPwd })
+                            })
+                                .then(function (resp) { return resp.json(); })
+                                .then(function (data) {
+                                    if (data.success) { alert('密码修改成功！请重新登录。'); location.reload(); }
+                                    else { showError(passwordError, data.message || '修改失败'); }
+                                })
+                                .catch(function () { showError(passwordError, '网络错误'); });
+                        });
+
+                        // 初始化：如果已登录，加载用户信息
+                        if (isAuthenticated) loadUserInfo();
+
+})();
+</script>
 </body>
+
 </html>
