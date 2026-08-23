@@ -47,7 +47,6 @@ def print_help():
     print("  /resume    - 查看当前简历内容")
     print("  /vector xx - 查看向量库中已存储的xx相关JD数量")
     print("  /history   - 查看对话历史")
-    print("  /clear     - 清空对话历史")
     print("  /help      - 打印此帮助信息")
     print("  /quit      - 退出程序")
     print("  直接输入消息 - 与面试 Agent 对话 (需在面试中)")
@@ -90,11 +89,6 @@ def main():
         if user_input in ("/quit", "/exit"):
             print("再见!")
             break
-
-        if user_input == "/clear":
-            chat_history.clear()
-            print("对话历史已清空。")
-            continue
 
         if user_input == "/help":
             print_help()
@@ -143,7 +137,7 @@ def main():
             continue
 
         if user_input == "/start":
-            """启动面试流程: 清空历史,让Agent自主调用工具,打印调试信息"""
+            """启动面试流程: 重置会话,让Agent自主调用工具,打印调试信息"""
             print("\n" + "=" * 60)
             print("正在初始化面试流程...")
             print("=" * 60)

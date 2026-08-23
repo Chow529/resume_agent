@@ -1718,7 +1718,7 @@
                     <div class="action-item disabled" data-command="/history">
                         <div class="action-left"><i class="fas fa-clock-rotate-left action-icon"></i>
                             <div>
-                                <div class="action-name">对话历史</div>
+                                <div class="action-name">对话管理</div>
                                 <div class="action-desc">查看之前的对话记录</div>
                             </div>
                         </div><span class="action-tag">/history</span>
@@ -1747,19 +1747,11 @@
                             </div>
                         </div>
                     </div>
-                    <div class="action-item disabled" data-command="/clear">
-                        <div class="action-left"><i class="fas fa-trash-can action-icon"></i>
-                            <div>
-                                <div class="action-name">清空历史</div>
-                                <div class="action-desc">清除所有对话记录</div>
-                            </div>
-                        </div><span class="action-tag">/clear</span>
-                    </div>
                 </div>
             </div>
             <div class="sidebar-section" id="sessionHistorySection" style="display:none;">
                 <div class="sidebar-title">
-                    <span style="flex:1;">对话历史</span>
+                    <span style="flex:1;">对话管理</span>
                     <button class="new-session-btn" id="newSessionBtn" style="width:auto;padding:4px 8px;font-size:11px;margin-bottom:0;">
                         <i class="fas fa-plus"></i> 新对话
                     </button>
@@ -1827,9 +1819,6 @@
                 </div>
                 <div class="command-item"><code>/history</code>
                     <p>查看对话历史</p>
-                </div>
-                <div class="command-item"><code>/clear</code>
-                    <p>清空对话历史</p>
                 </div>
             </div>
         </div>
@@ -2167,7 +2156,7 @@
                             currentDbSessionId = bindData.db_session_id;
                         }
                         updateStatus('已加载历史对话');
-                        document.getElementById('topBarTitle').textContent = '对话历史 - ' + sessionInfo.session_name;
+                        document.getElementById('topBarTitle').textContent = sessionInfo.session_name;
                         loadSessionHistory();
                         enableChatControls();
                     })
@@ -2314,7 +2303,7 @@
                     item.addEventListener('click', function(e) {
                         if (e.target.closest('.session-delete')) return;
                         if (e.target.closest('.session-rename')) return;
-                        loadSessionMessages(sess.id);
+                        loadSessionMessages(sess.id, sess.session_name);
                     });
                     // 重命名会话
                     var renameBtn = item.querySelector('.session-rename');
@@ -2336,7 +2325,7 @@
                 });
             }
 
-            function loadSessionMessages(dbSessionId) {
+            function loadSessionMessages(dbSessionId, sessionName) {
                 // 关键：使用 sess_<db_id> 格式，确保后端可从数据库恢复会话
                 var sessId = "sess_" + dbSessionId;
                 sessionId = sessId;
@@ -2363,7 +2352,7 @@
                                 addMessage(msg.role, msg.content);
                             });
                             // 更新顶部栏
-                            document.getElementById('topBarTitle').textContent = '对话历史 - #' + dbSessionId;
+                            document.getElementById('topBarTitle').textContent = sessionName || ('会话 #' + dbSessionId);
                             updateStatus('查看历史对话');
                             
                             // 关键：注册到后端内存会话中并绑定用户，确保后续对话消息可保存
@@ -2452,6 +2441,9 @@
                 .then(function(resp) { return resp.json(); })
                 .then(function(data) {
                     if (data.success) {
+                        if (currentDbSessionId === dbSessionId) {
+                            document.getElementById('topBarTitle').textContent = newName.trim();
+                        }
                         loadSessionHistory();
                     } else {
                         alert('重命名失败: ' + (data.message || '未知错误'));
@@ -2610,7 +2602,7 @@
 
             function checkSession() { fetch("/api/sessions/" + sessionId + "/status").then(function (resp) { if (resp.ok) return resp.json(); throw new Error("Status " + resp.status); }).then(function (data) { if (data.status === "interviewing") { updateSessionStatus("interviewing"); } else { updateSessionStatus(data.status === "terminated" ? "terminated" : "idle"); } }).catch(function (err) { console.error("会话检查失败:", err); }); }
 
-            function sendMessage() { if (!isAuthenticated) return; var message = messageInput.value.trim(); if (!message || isTyping) return; isTyping = true; statusText.textContent = "Agent 正在思考..."; document.getElementById("sessionStatusText").textContent = "思考中..."; addMessage("user", message); showTypingIndicator(); messageInput.value = ""; messageInput.style.height = "auto"; fetch("/api/sessions/" + sessionId + "/chat", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ message: message, user_id: userId }) }).then(function (resp) { return resp.json(); }).then(function (result) { removeTypingIndicator(); addMessage("agent", result.message); if (result.type === "cleared") { chatMessages.innerHTML = ""; addWelcomeMessage(); updateSessionStatus("idle"); } else if (result.type === "interview_start") { updateSessionStatus("interviewing"); } else if (result.type === "interview_end") { updateSessionStatus("terminated"); } else { updateSessionStatus("idle"); } isTyping = false; /* 关键：同步 db_session_id，确保前端 sessionId 与数据库一致 */ if (result.db_session_id) { var canonicalId = "sess_" + result.db_session_id; if (sessionId !== canonicalId) { sessionId = canonicalId; localStorage.setItem("agentSessionId", canonicalId); document.getElementById("sessionIdInput").value = canonicalId; document.getElementById("sessionIdDisplay").textContent = canonicalId; if (result.db_session_id !== currentDbSessionId) { currentDbSessionId = result.db_session_id; } } } /* 关键：刷新侧边栏会话历史，更新消息计数 */ loadSessionHistory(); }).catch(function (err) { console.error("发送失败:", err); removeTypingIndicator(); addMessage("agent", "[错误] 服务器响应失败，请检查网络连接"); updateSessionStatus("idle"); isTyping = false; }); }
+            function sendMessage() { if (!isAuthenticated) return; var message = messageInput.value.trim(); if (!message || isTyping) return; isTyping = true; statusText.textContent = "Agent 正在思考..."; document.getElementById("sessionStatusText").textContent = "思考中..."; addMessage("user", message); showTypingIndicator(); messageInput.value = ""; messageInput.style.height = "auto"; fetch("/api/sessions/" + sessionId + "/chat", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ message: message, user_id: userId }) }).then(function (resp) { return resp.json(); }).then(function (result) { removeTypingIndicator(); addMessage("agent", result.message); if (result.type === "interview_start") { updateSessionStatus("interviewing"); } else if (result.type === "interview_end") { updateSessionStatus("terminated"); } else { updateSessionStatus("idle"); } isTyping = false; /* 关键：同步 db_session_id，确保前端 sessionId 与数据库一致 */ if (result.db_session_id) { var canonicalId = "sess_" + result.db_session_id; if (sessionId !== canonicalId) { sessionId = canonicalId; localStorage.setItem("agentSessionId", canonicalId); document.getElementById("sessionIdInput").value = canonicalId; document.getElementById("sessionIdDisplay").textContent = canonicalId; if (result.db_session_id !== currentDbSessionId) { currentDbSessionId = result.db_session_id; } } } /* 关键：刷新侧边栏会话历史，更新消息计数 */ loadSessionHistory(); }).catch(function (err) { console.error("发送失败:", err); removeTypingIndicator(); addMessage("agent", "[错误] 服务器响应失败，请检查网络连接"); updateSessionStatus("idle"); isTyping = false; }); }
 
             function addMessage(role, content) { var messageDiv = document.createElement("div"); messageDiv.className = "message " + role; var header = role === "user" ? "你" : "Agent"; var icon = role === "user" ? "fas fa-user" : "fas fa-robot"; var escapedContent = escapeHtml(content); messageDiv.innerHTML = '<div class="message-header"><i class="' + icon + '"></i>' + header + '</div><div class="message-content">' + escapedContent + '</div>'; if (chatMessages.children.length === 1) { var firstAgentMsg = chatMessages.querySelector(".message.agent"); if (firstAgentMsg && firstAgentMsg.textContent.indexOf("请先登录") >= 0) { chatMessages.innerHTML = ""; } } chatMessages.appendChild(messageDiv); chatMessages.scrollTop = chatMessages.scrollHeight; }
 

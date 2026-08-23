@@ -1012,26 +1012,6 @@ async def chat(session_id: str, request: Request):
             "db_session_id": session.get("db_session_id")
         }
 
-    elif user_message == "/clear":
-        session["chat_history"].clear()
-        session["status"] = "initialized"
-        # 删除当前会话的数据库历史记录
-        db_id = session.get("db_session_id")
-        if db_id:
-            try:
-                from sqlClass.chat_session_model import ChatSessionContentModel
-                ChatSessionContentModel().delete_contents_by_session(db_id)
-            except Exception as e:
-                logger.error(f"清空历史失败: {e}")
-        clear_msg = "对话历史已清空。"
-        return {
-            "session_id": session_id,
-            "message": clear_msg,
-            "role": "agent",
-            "type": "cleared",
-            "db_session_id": db_id
-        }
-
     elif user_message == "/resume":
         session = _global_sessions[session_id]
         user_id = session.get("user_id")
