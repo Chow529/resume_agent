@@ -10,6 +10,7 @@ if str(project_root) not in sys.path:
 
 from langchain_chroma import Chroma
 from langchain_core.vectorstores import VectorStoreRetriever
+from langchain_core.documents import Document
 from langchain_text_splitters import RecursiveCharacterTextSplitter
 from utils.path_tool import get_abs_path  
 import os  
@@ -203,3 +204,75 @@ class ChromaServer:
         if not self.CheckMd5(md5):  # 注意：CheckMd5 返回 True 表示不存在
             self.__delectMd5(md5)
             self.__delectVector(md5)
+
+    def list_all_documents(self):
+        """
+        列出向量库中所有文档
+        
+        :return: 文档列表，每个文档包含 id、page_content 和 metadata
+        :rtype: list
+        """
+        try:
+            data = self.chroma.get()
+            documents = []
+            if data and data.get('ids'):
+                ids = data['ids']
+                docs = data.get('documents') or []
+                metadatas = data.get('metadatas') or []
+                for i, doc_id in enumerate(ids):
+                    metadata = metadatas[i] if i < len(metadatas) and metadatas[i] else {}
+                    doc = {
+                        'id': doc_id,
+                        'page_content': docs[i] if i < len(docs) else '',
+                        'metadata': metadata if metadata else {}
+                    }
+                    documents.append(doc)
+            return documents
+        except Exception as e:
+            logger.error(f"获取向量库文档列表失败: {e}")
+            return []
+
+    def add_qa_document(self, q_id: str, question: str, answer: str, section: str = "自定义"):
+        """
+        添加一个 QA 文档到向量库
+        
+        :param q_id: 问题ID（如 Q100）
+        :param question: 问题内容
+        :param answer: 答案内容
+        :param section: 章节名称
+        :return: 是否成功
+        """
+        try:
+            qa_content = f"**{q_id}: {question}**\nA{q_id[1:]}: {answer}"
+            doc = Document(
+                page_content=qa_content,
+                metadata={
+                    "section": section,
+                    "q_id": q_id,
+                    "type": "Q&A",
+                    "source": "user_manual"
+                }
+            )
+            self.chroma.add_texts(
+                texts=[doc.page_content],
+                ids=[q_id],
+                metadatas=[doc.metadata]
+            )
+            return True
+        except Exception as e:
+            logger.error(f"添加 QA 文档失败: {e}")
+            return False
+
+    def delete_document(self, doc_id: str):
+        """
+        删除指定文档
+        
+        :param doc_id: 文档ID
+        :return: 是否成功
+        """
+        try:
+            self.chroma.delete([doc_id])
+            return True
+        except Exception as e:
+            logger.error(f"删除文档失败: {e}")
+            return False

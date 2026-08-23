@@ -104,11 +104,19 @@ def save_qa_to_vector_db():
     # 准备 texts 和 ids
     texts = [doc.page_content for doc in documents]
     ids = [doc.metadata["q_id"] for doc in documents]
+    metadatas = [doc.metadata for doc in documents]
 
-    # 批量添加到 Chroma
+    # 批量添加到 Chroma（分批处理，每批最多 25 条）
     try:
-        chroma.chroma.add_texts(texts=texts, ids=ids)
-        print(f"\n成功存储 {len(texts)} 个 Q&A 单元到向量库")
+        batch_size = 25
+        total_stored = 0
+        for i in range(0, len(texts), batch_size):
+            batch_texts = texts[i:i + batch_size]
+            batch_ids = ids[i:i + batch_size]
+            batch_metadatas = metadatas[i:i + batch_size]
+            chroma.chroma.add_texts(texts=batch_texts, ids=batch_ids, metadatas=batch_metadatas)
+            total_stored += len(batch_texts)
+        print(f"\n成功存储 {total_stored} 个 Q&A 单元到向量库")
         print(f"向量库名称: user_manual")
     except Exception as e:
         print(f"\n存储到向量库时出错: {e}")

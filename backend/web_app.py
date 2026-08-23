@@ -9,6 +9,7 @@ import time
 import logging
 import io
 import tempfile
+import datetime
 from pathlib import Path
 
 # 确保可以导入项目根目录的模块
@@ -16,10 +17,15 @@ project_root = Path(__file__).parent.parent  # 从 backend/ 回到项目根目�
 if str(project_root) not in sys.path:
     sys.path.insert(0, str(project_root))
 
-from fastapi import FastAPI, HTTPException, Request, UploadFile, File, Form
+# 添加 sqlClass 目录到路径
+sql_class_dir = Path(__file__).parent / "sqlClass"
+if str(sql_class_dir) not in sys.path:
+    sys.path.insert(0, str(sql_class_dir))
+
+from fastapi import FastAPI, HTTPException, Request, UploadFile, File, Form, Query
 from fastapi.staticfiles import StaticFiles
 from fastapi.responses import HTMLResponse, FileResponse, Response
-from langchain_core.messages import HumanMessage, AIMessage
+from langchain_core.messages import HumanMessage, AIMessage, SystemMessage
 import asyncio
 
 
@@ -88,34 +94,22 @@ def build_agent():
     chat_model = ChatModelIni().InitModel()
     agent = create_agent(
         chat_model,
-        tools=[agent_tools.get_job_working, agent_tools.get_jd_content],
+        tools=[agent_tools.get_job_working, agent_tools.get_jd_content,agent_tools.get_web_tutorial],
         system_prompt=system_prompt,
+        # config={"recursion_limit": 8}
     )
     return agent
 
 
 def init_session(session_id: str):
-    """初始化一个会话，同时创建数据库中的会话记录"""
+    """初始化一个会话（仅内存，不创建数据库记录）。数据库会话在用户登录绑定后由 bind_session_user 创建。"""
     session_data = {
         "chat_history": [],
         "status": "initialized",
         "created_at": int(time.time()),
-        "db_session_id": None  # 数据库中的会话ID
+        "db_session_id": None
     }
     _global_sessions[session_id] = session_data
-
-    # 同时在数据库中创建会话记录
-    try:
-        from sqlClass.chat_session_model import ChatSessionModel
-        chat_session_model = ChatSessionModel()
-        db_session_id = chat_session_model.create_session(
-            user_id=0,  # 0 表示未登录用户，登录后会更新
-            session_name=f"会话_{session_id[:8]}"
-        )
-        if db_session_id:
-            session_data["db_session_id"] = db_session_id
-    except Exception as e:
-        logger.debug(f"创建会话记录失败: {e}")  # 不记录为错误，因为可能是表不存在
 
 
 def get_last_ai_message(messages):
@@ -134,10 +128,12 @@ def save_message_to_db(session_id: str, role: str, content: str):
     try:
         session = _global_sessions.get(session_id)
         if not session:
+            logger.warning(f"保存消息失败: 会话 {session_id} 不存在于内存中")
             return
 
         db_session_id = session.get("db_session_id")
         if not db_session_id:
+            logger.warning(f"保存消息失败: 会话 {session_id} 没有 db_session_id")
             return
 
         from sqlClass.chat_session_model import ChatSessionContentModel
@@ -147,8 +143,9 @@ def save_message_to_db(session_id: str, role: str, content: str):
             role=role,
             content=content
         )
+        logger.debug(f"消息已保存: session={db_session_id}, role={role}")
     except Exception as e:
-        logger.debug(f"保存消息到数据库失败: {e}")
+        logger.error(f"保存消息到数据库失败: {e}", exc_info=True)
 
 
 # 定义常用邮箱后缀
@@ -761,13 +758,56 @@ async def index():
 
 
 @app.get("/api/sessions/{session_id}/init")
-async def init_session_endpoint(session_id: str):
-    """初始化会话端点"""
+async def init_session_endpoint(session_id: str, user_id: int = Query(None)):
+    """初始化会话端点 - 同时创建数据库会话记录"""
     if session_id not in _global_sessions:
+        # 尝试从 session_id 解析数据库ID（格式：sess_<db_id>）
+        db_session_id = None
+        chat_history = []
+        
+        if session_id.startswith("sess_"):
+            try:
+                parts = session_id.split("_", 1)
+                if len(parts) > 1:
+                    possible_db_id = int(parts[1])
+                    from sqlClass.chat_session_model import ChatSessionModel, ChatSessionContentModel
+                    session_model = ChatSessionModel()
+                    db_session = session_model.get_session_by_id(possible_db_id)
+                    if db_session:
+                        db_session_id = possible_db_id
+                        # 加载历史消息
+                        content_model = ChatSessionContentModel()
+                        contents = content_model.get_contents_by_session(db_session_id)
+                        for c in contents:
+                            role = c.get('role', 'user')
+                            content = c.get('content', '')
+                            if role == 'user':
+                                chat_history.append(HumanMessage(content=content))
+                            elif role == 'assistant':
+                                chat_history.append(AIMessage(content=content))
+                        logger.info(f"从数据库加载会话 {db_session_id}，共 {len(chat_history)} 条历史消息")
+            except (ValueError, TypeError):
+                pass
+            except Exception as e:
+                logger.error(f"加载数据库会话失败: {e}")
+        
+        # 如果没有从数据库加载到会话，则创建新的
+        if not db_session_id and user_id:
+            try:
+                from sqlClass.chat_session_model import ChatSessionModel
+                chat_session_model = ChatSessionModel()
+                db_session_id = chat_session_model.add_session(
+                    user_id=user_id,
+                    session_name=f"对话 {datetime.datetime.now().strftime('%Y-%m-%d %H:%M')}"
+                )
+            except Exception as e:
+                logger.error(f"创建数据库会话失败: {e}")
+        
         _global_sessions[session_id] = {
-            "chat_history": [],
+            "chat_history": chat_history,
             "status": "initialized",
-            "created_at": int(time.time())
+            "created_at": int(time.time()),
+            "db_session_id": db_session_id
         }
     return {"session_id": session_id, "status": "initialized"}
 
@@ -776,6 +816,7 @@ async def init_session_endpoint(session_id: str):
 async def bind_session_user(session_id: str, request: Request):
     """
     将 user_id 绑定到会话，使 /start 和 /resume 能读取该用户的简历
+    如果数据库会话不存在，则创建一个新的
     """
     data = await request.json()
     uid = data.get("user_id")
@@ -784,27 +825,81 @@ async def bind_session_user(session_id: str, request: Request):
     if session_id not in _global_sessions:
         raise HTTPException(status_code=404, detail="会话不存在")
     _global_sessions[session_id]["user_id"] = int(uid)
-    return {"success": True}
+    
+    # 确保数据库会话存在
+    db_session_id = _global_sessions[session_id].get("db_session_id")
+    if not db_session_id:
+        try:
+            from sqlClass.chat_session_model import ChatSessionModel
+            chat_session_model = ChatSessionModel()
+            db_session_id = chat_session_model.add_session(
+                user_id=int(uid),
+                session_name=f"对话 {datetime.datetime.now().strftime('%Y-%m-%d %H:%M')}"
+            )
+            _global_sessions[session_id]["db_session_id"] = db_session_id
+        except Exception as e:
+            logger.error(f"创建数据库会话失败: {e}")
+            return {"success": False, "message": f"创建会话失败: {str(e)}"}
+    else:
+        # 更新数据库中的 user_id
+        try:
+            from sqlClass.chat_session_model import ChatSessionModel
+            chat_session_model = ChatSessionModel()
+            chat_session_model.update_session(db_session_id, user_id=int(uid))
+        except Exception as e:
+            logger.debug(f"更新会话用户失败: {e}")
+    
+    return {"success": True, "db_session_id": db_session_id}
 
 
 @app.post("/api/sessions/{session_id}/chat")
 async def chat(session_id: str, request: Request):
     """对话接口 - 用户发送消息，Agent回复"""
-    # 如果会话不存在，自动创建（容错处理，解决session过期问题）
+    # 如果会话不存在，自动创建或从数据库加载
     if session_id not in _global_sessions:
+        # 尝试从数据库加载会话
+        db_session_id = None
+        chat_history = []
+        
+        # session_id 格式为 sess_<数字ID>，尝试解析数据库ID
+        if session_id.startswith("sess_"):
+            try:
+                # sess_<db_id> 格式
+                parts = session_id.split("_", 1)
+                if len(parts) > 1:
+                    possible_db_id = int(parts[1])
+                    from sqlClass.chat_session_model import ChatSessionModel
+                    session_model = ChatSessionModel()
+                    db_session = session_model.get_session_by_id(possible_db_id)
+                    if db_session:
+                        db_session_id = possible_db_id
+                        # 加载历史消息
+                        from sqlClass.chat_session_model import ChatSessionContentModel
+                        content_model = ChatSessionContentModel()
+                        contents = content_model.get_contents_by_session(db_session_id)
+                        for c in contents:
+                            role = c.get('role', 'user')
+                            content = c.get('content', '')
+                            if role == 'user':
+                                chat_history.append(HumanMessage(content=content))
+                            elif role == 'assistant':
+                                chat_history.append(AIMessage(content=content))
+                        logger.info(f"从数据库加载会话 {db_session_id}，共 {len(chat_history)} 条历史消息")
+            except (ValueError, TypeError):
+                pass  # 不是 sess_<数字> 格式，继续创建新会话
+            except Exception as e:
+                logger.error(f"加载数据库会话失败: {e}")
+        
         _global_sessions[session_id] = {
-            "chat_history": [],
+            "chat_history": chat_history,
             "status": "initialized",
-            "created_at": int(time.time())
+            "created_at": int(time.time()),
+            "db_session_id": db_session_id
         }
-        logger.debug(f"自动创建新会话: {session_id}")
+        logger.debug(f"创建/加载会话: {session_id}, db_session_id: {db_session_id}")
 
     data = await request.json()
     user_message = data.get("message", "").strip()
-    # print(user_message)
-
-    # 保存用户消息到数据库（无论是否特殊命令）
-    save_message_to_db(session_id, "user", user_message)
 
     if not user_message:
         raise HTTPException(status_code=400, detail="消息内容不能为空")
@@ -814,6 +909,23 @@ async def chat(session_id: str, request: Request):
     uid = data.get("user_id")
     if uid:
         session["user_id"] = int(uid)
+    
+    # 自动创建 db_session_id（如果不存在且有 user_id），防止消息丢失
+    if not session.get("db_session_id") and session.get("user_id"):
+        try:
+            from sqlClass.chat_session_model import ChatSessionModel
+            chat_session_model = ChatSessionModel()
+            db_session_id = chat_session_model.add_session(
+                user_id=session["user_id"],
+                session_name=f"对话 {datetime.datetime.now().strftime('%Y-%m-%d %H:%M')}"
+            )
+            session["db_session_id"] = db_session_id
+            logger.info(f"自动创建数据库会话: {db_session_id}")
+        except Exception as e:
+            logger.error(f"自动创建数据库会话失败: {e}")
+
+    # 保存用户消息到数据库（无论是否特殊命令）
+    save_message_to_db(session_id, "user", user_message)
 
     # 处理特殊命令
     if user_message == "/start":
@@ -823,26 +935,23 @@ async def chat(session_id: str, request: Request):
 
             # 检查是否有 user_id
             if not user_id:
-                save_message_to_db(session_id, "user", user_message)
                 return {
                     "session_id": session_id,
                     "message": "[请先登录] 请先登录或注册用户，然后上传简历",
                     "role": "error",
-                    "type": "error"
+                    "type": "error",
+                    "db_session_id": session.get("db_session_id")
                 }
 
             # 清理旧对话历史
             chat_history = session["chat_history"]
             chat_history.clear()
 
-            # 保存用户消息到数据库
-            save_message_to_db(session_id, "user", user_message)
-
             # 让 Agent 主导面试流程 - Agent 会自动调用 get_job_working() 获取简历
             chat_history.append(HumanMessage(content=f"开始面试，请先获取我的简历信息,我的user_id是{user_id}"))
 
             agent = get_agent()
-            response = agent.invoke({"messages": chat_history})
+            response = agent.invoke({"messages": chat_history},config={"recursion_limit": 8})
             messages = response.get("messages", [])
             last_ai = get_last_ai_message(messages)
             ai_reply = last_ai.content if last_ai and isinstance(last_ai.content, str) else ""
@@ -851,39 +960,38 @@ async def chat(session_id: str, request: Request):
             session["status"] = "interviewing"
 
             # 保存 agent 回复到数据库
-            save_message_to_db(session_id, "agent", ai_reply)
+            save_message_to_db(session_id, "assistant", ai_reply)
 
             return {
                 "session_id": session_id,
                 "message": ai_reply,
                 "role": "agent",
-                "type": "interview_start"
+                "type": "interview_start",
+                "db_session_id": session.get("db_session_id")
             }
         except Exception as e:
             logger.error(f"Agent执行错误: {e}")
             return {
                 "session_id": session_id,
                 "message": f"[错误] Agent执行失败: {str(e)}",
-                "role": "error"
+                "role": "error",
+                "db_session_id": session.get("db_session_id")
             }
 
     elif user_message == "/end":
-        # 保存用户消息
-        save_message_to_db(session_id, "user", user_message)
         session["chat_history"] = []
         session["status"] = "terminated"
         end_msg = "面试已结束，可以输入 /start 重新开始"
-        save_message_to_db(session_id, "agent", end_msg)
+        save_message_to_db(session_id, "assistant", end_msg)
         return {
             "session_id": session_id,
             "message": end_msg,
             "role": "agent",
-            "type": "interview_end"
+            "type": "interview_end",
+            "db_session_id": session.get("db_session_id")
         }
 
     elif user_message == "/history":
-        # 保存用户消息
-        save_message_to_db(session_id, "user", user_message)
         chat_history = session["chat_history"]
         if not chat_history:
             message_text = "暂无对话历史。"
@@ -895,26 +1003,33 @@ async def chat(session_id: str, request: Request):
                 lines.append(f"  {i}. [{role}] {content}...")
             message_text = "\n".join(lines)
         history_msg = f"\n--- 对话历史 ({len(chat_history)} 条) ---\n{message_text}\n---"
-        save_message_to_db(session_id, "agent", history_msg)
+        save_message_to_db(session_id, "assistant", history_msg)
         return {
             "session_id": session_id,
             "message": history_msg,
             "role": "agent",
-            "type": "history"
+            "type": "history",
+            "db_session_id": session.get("db_session_id")
         }
 
     elif user_message == "/clear":
-        # 保存用户消息
-        save_message_to_db(session_id, "user", user_message)
         session["chat_history"].clear()
         session["status"] = "initialized"
+        # 删除当前会话的数据库历史记录
+        db_id = session.get("db_session_id")
+        if db_id:
+            try:
+                from sqlClass.chat_session_model import ChatSessionContentModel
+                ChatSessionContentModel().delete_contents_by_session(db_id)
+            except Exception as e:
+                logger.error(f"清空历史失败: {e}")
         clear_msg = "对话历史已清空。"
-        save_message_to_db(session_id, "agent", clear_msg)
         return {
             "session_id": session_id,
             "message": clear_msg,
             "role": "agent",
-            "type": "cleared"
+            "type": "cleared",
+            "db_session_id": db_id
         }
 
     elif user_message == "/resume":
@@ -923,11 +1038,14 @@ async def chat(session_id: str, request: Request):
         
         # 检查是否有 user_id
         if not user_id:
+            reply_msg = "[请先登录] 请先登录并上传简历"
+            save_message_to_db(session_id, "assistant", reply_msg)
             return {
                 "session_id": session_id,
-                "message": "[请先登录] 请先登录并上传简历",
+                "message": reply_msg,
                 "role": "agent",
-                "type": "resume"
+                "type": "resume",
+                "db_session_id": session.get("db_session_id")
             }
 
         # 从数据库获取该用户激活的简历
@@ -937,19 +1055,17 @@ async def chat(session_id: str, request: Request):
 
         if active_resume and active_resume.get("resume_text"):
             resume_text = active_resume["resume_text"]
-            return {
-                "session_id": session_id,
-                "message": f"\n[简历内容]\n{resume_text}",
-                "role": "agent",
-                "type": "resume"
-            }
+            reply_msg = f"\n[简历内容]\n{resume_text}"
         else:
-            return {
-                "session_id": session_id,
-                "message": "[提示] 未找到激活的简历，请先上传并激活简历",
-                "role": "agent",
-                "type": "resume_not_found"
-            }
+            reply_msg = "[提示] 未找到激活的简历，请先上传并激活简历"
+        save_message_to_db(session_id, "assistant", reply_msg)
+        return {
+            "session_id": session_id,
+            "message": reply_msg,
+            "role": "agent",
+            "type": "resume" if active_resume and active_resume.get("resume_text") else "resume_not_found",
+            "db_session_id": session.get("db_session_id")
+        }
 
     elif user_message.startswith("/vector"):
         try:
@@ -957,50 +1073,163 @@ async def chat(session_id: str, request: Request):
             jd_parts = [x.strip() for x in user_message.split(" ") if x.strip()]
             if len(jd_parts) > 1:
                 all_docs = retriever.invoke(jd_parts[-1])
-                return {
-                    "session_id": session_id,
-                    "message": f"\n[向量库] 当前存储了 {len(all_docs)} 条相关JD记录",
-                    "role": "agent",
-                    "type": "vector"
-                }
+                reply_msg = f"\n[向量库] 当前存储了 {len(all_docs)} 条相关JD记录"
             else:
-                return {
-                    "session_id": session_id,
-                    "message": "请提供查询关键词，例如: /vector python",
-                    "role": "agent",
-                    "type": "vector"
-                }
-        except Exception as e:
+                reply_msg = "请提供查询关键词，例如: /vector python"
+            save_message_to_db(session_id, "assistant", reply_msg)
             return {
                 "session_id": session_id,
-                "message": f"[向量库] 查询失败: {str(e)}",
-                "role": "error"
+                "message": reply_msg,
+                "role": "agent",
+                "type": "vector",
+                "db_session_id": session.get("db_session_id")
+            }
+        except Exception as e:
+            reply_msg = f"[向量库] 查询失败: {str(e)}"
+            save_message_to_db(session_id, "assistant", reply_msg)
+            return {
+                "session_id": session_id,
+                "message": reply_msg,
+                "role": "error",
+                "db_session_id": session.get("db_session_id")
             }
 
     # 普通对话 - 交给Agent处理
     chat_history = session["chat_history"]
+    
+    # 限制历史长度，避免超出 token 限制（保留最近 20 条消息）
+    MAX_HISTORY_LENGTH = 20
+    if len(chat_history) > MAX_HISTORY_LENGTH:
+        chat_history = chat_history[-MAX_HISTORY_LENGTH:]
+        session["chat_history"] = chat_history
+    
     chat_history.append(HumanMessage(content=user_message))
 
     try:
         agent = get_agent()
-        response = agent.invoke({"messages": chat_history})
+        # 注入 user_id 上下文：若 Agent 中途再调 get_job_working 等需要 user_id 的工具,
+        # 避免因缺参反复重试导致空跑到 recursion_limit。仅传给本次 invoke, 不写入 chat_history 以免污染历史。
+        uid_for_agent = session.get("user_id")
+        if uid_for_agent:
+            agent_messages = [SystemMessage(content=f"当前用户的 user_id 是 {uid_for_agent},调用需要 user_id 的工具时请使用该值。")] + chat_history
+        else:
+            agent_messages = chat_history
+        response = agent.invoke({"messages": agent_messages})
         messages = response.get("messages", [])
         last_ai = get_last_ai_message(messages)
         ai_reply = last_ai.content if last_ai else ""
         chat_history.append(AIMessage(content=ai_reply))
+        
+        # 保存 Agent 回复到数据库
+        save_message_to_db(session_id, "assistant", ai_reply)
 
         return {
             "session_id": session_id,
             "message": ai_reply,
-            "role": "agent"
+            "role": "agent",
+            "db_session_id": session.get("db_session_id")
         }
     except Exception as e:
         logger.error(f"Agent执行错误: {e}", exc_info=True)
+        error_msg = f"[错误] Agent执行失败: {str(e)}"
+        # 保存错误消息到数据库
+        save_message_to_db(session_id, "assistant", error_msg)
         return {
             "session_id": session_id,
-            "message": f"[错误] Agent执行失败: {str(e)}",
-            "role": "error"
+            "message": error_msg,
+            "role": "error",
+            "db_session_id": session.get("db_session_id")
         }
+
+
+# ─────────────────────────────────────────────────────
+# 向量库管理 API（user_manual 可视化）
+# ─────────────────────────────────────────────────────
+
+@app.get("/api/vector/manual/list")
+async def list_manual_documents():
+    """列出 user_manual 向量库中所有文档"""
+    try:
+        chroma = ChromaServer(chromaType="user_manual")
+        documents = chroma.list_all_documents()
+        
+        # 统计信息
+        sections = {}
+        for doc in documents:
+            metadata = doc.get('metadata') or {}
+            section = metadata.get('section', '未知')
+            sections[section] = sections.get(section, 0) + 1
+        
+        return {
+            "success": True,
+            "total": len(documents),
+            "sections": sections,
+            "documents": documents
+        }
+    except Exception as e:
+        logger.error(f"获取文档列表失败: {e}")
+        return {"success": False, "message": f"获取文档列表失败: {str(e)}"}
+
+
+@app.post("/api/vector/manual/add")
+async def add_manual_document(request: Request):
+    """添加 QA 文档到 user_manual 向量库"""
+    try:
+        data = await request.json()
+        question = data.get("question", "").strip()
+        answer = data.get("answer", "").strip()
+        section = data.get("section", "自定义")
+        q_id = data.get("q_id", "")
+        
+        # 验证 QA 格式
+        if not question or not answer:
+            return {"success": False, "message": "问题和答案都不能为空"}
+        
+        if len(question) < 2:
+            return {"success": False, "message": "问题内容过短，请提供完整的问题描述"}
+        
+        if len(answer) < 2:
+            return {"success": False, "message": "答案内容过短，请提供完整的回答"}
+        
+        # 自动生成 q_id（如果未提供）
+        if not q_id:
+            chroma = ChromaServer(chromaType="user_manual")
+            existing_docs = chroma.list_all_documents()
+            max_num = 0
+            for doc in existing_docs:
+                doc_id = doc.get('id', '')
+                if doc_id.startswith('Q') and doc_id[1:].isdigit():
+                    num = int(doc_id[1:])
+                    if num > max_num:
+                        max_num = num
+            q_id = f"Q{max_num + 1}"
+        
+        chroma = ChromaServer(chromaType="user_manual")
+        success = chroma.add_qa_document(q_id, question, answer, section)
+        
+        if success:
+            return {"success": True, "message": "文档添加成功", "q_id": q_id}
+        else:
+            return {"success": False, "message": "文档添加失败，请重试"}
+    except Exception as e:
+        logger.error(f"添加文档失败: {e}")
+        return {"success": False, "message": f"添加文档失败: {str(e)}"}
+
+
+@app.delete("/api/vector/manual/{doc_id}")
+async def delete_manual_document(doc_id: str):
+    """删除 user_manual 向量库中的文档"""
+    try:
+        chroma = ChromaServer(chromaType="user_manual")
+        success = chroma.delete_document(doc_id)
+        
+        if success:
+            return {"success": True, "message": f"文档 {doc_id} 已删除"}
+        else:
+            return {"success": False, "message": f"删除文档 {doc_id} 失败"}
+    except Exception as e:
+        logger.error(f"删除文档失败: {e}")
+        return {"success": False, "message": f"删除文档失败: {str(e)}"}
 
 
 @app.get("/api/sessions/{session_id}/status")
@@ -1013,5 +1242,153 @@ async def get_session_status(session_id: str):
             "created_at": int(time.time())
         }
     return {"session_id": session_id, "status": _global_sessions[session_id]["status"]}
+
+
+@app.get("/api/sessions/list")
+async def list_user_sessions(user_id: int = Query(None)):
+    """获取用户的所有会话列表"""
+    if not user_id:
+        return {"success": False, "message": "缺少 user_id", "sessions": []}
+    try:
+        from sqlClass.chat_session_model import ChatSessionModel
+        chat_session_model = ChatSessionModel()
+        sessions = chat_session_model.get_sessions_by_user(user_id)
+        # 为每个会话获取消息数量
+        from sqlClass.chat_session_model import ChatSessionContentModel
+        content_model = ChatSessionContentModel()
+        result = []
+        for s in sessions:
+            contents = content_model.get_contents_by_session(s['id'])
+            result.append({
+                'id': s['id'],
+                'session_name': s.get('session_name', f'会话_{s["id"]}'),
+                'message_count': len(contents),
+                'created_at': str(s.get('created_at', '')),
+                'updated_at': str(s.get('updated_at', s.get('created_at', ''))),
+                'last_message': contents[-1]['content'][:80] if contents else ''
+            })
+        return {"success": True, "sessions": result}
+    except Exception as e:
+        logger.error(f"获取会话列表失败: {e}")
+        return {"success": False, "message": str(e), "sessions": []}
+
+
+@app.get("/api/sessions/{db_session_id}/messages")
+async def get_session_messages(db_session_id: int):
+    """获取指定会话的所有消息"""
+    try:
+        from sqlClass.chat_session_model import ChatSessionContentModel
+        content_model = ChatSessionContentModel()
+        contents = content_model.get_contents_by_session(db_session_id)
+        messages = []
+        for c in contents:
+            role = c.get('role', 'user')
+            if role == 'assistant':
+                role = 'agent'
+            messages.append({
+                'role': role,
+                'content': c.get('content', ''),
+                'created_at': str(c.get('created_at', ''))
+            })
+        return {"success": True, "messages": messages}
+    except Exception as e:
+        logger.error(f"获取会话消息失败: {e}")
+        return {"success": False, "message": str(e), "messages": []}
+
+
+@app.put("/api/sessions/{db_session_id}/rename")
+async def rename_session(db_session_id: int, request: Request):
+    """重命名会话（同一用户下重名自动追加 _1）"""
+    data = await request.json()
+    name = (data.get("name") or "").strip()
+    if not name:
+        return {"success": False, "message": "名称不能为空"}
+    try:
+        from sqlClass.chat_session_model import ChatSessionModel
+        m = ChatSessionModel()
+        session = m.get_session_by_id(db_session_id)
+        if not session:
+            return {"success": False, "message": "会话不存在"}
+        user_id = session.get("user_id")
+        if user_id:
+            others = [s.get("session_name") for s in m.get_sessions_by_user(user_id) if s.get("id") != db_session_id]
+            final_name, n = name, 1
+            while final_name in others:
+                final_name = f"{name}_{n}"
+                n += 1
+            name = final_name
+        m.update_session(db_session_id, name=name)
+        return {"success": True, "message": "已重命名", "name": name}
+    except Exception as e:
+        logger.error(f"重命名会话失败: {e}")
+        return {"success": False, "message": str(e)}
+
+
+@app.delete("/api/sessions/{db_session_id}/delete")
+async def delete_session(db_session_id: int):
+    """删除指定会话及其所有消息（至少保留一条对话）"""
+    try:
+        from sqlClass.chat_session_model import ChatSessionModel, ChatSessionContentModel
+        session_model = ChatSessionModel()
+        session = session_model.get_session_by_id(db_session_id)
+        if not session:
+            return {"success": False, "message": "会话不存在"}
+        # 若该用户只有这一条会话，拒绝删除，保证历史列表至少保留一条
+        user_id = session.get("user_id")
+        if user_id and len(session_model.get_sessions_by_user(user_id)) <= 1:
+            return {"success": False, "message": "至少保留一条对话，无法删除"}
+        # 先删除所有消息内容
+        content_model = ChatSessionContentModel()
+        content_model.delete_contents_by_session(db_session_id)
+        # 再删除会话
+        deleted = session_model.delete_session(db_session_id)
+        return {"success": True, "message": "会话已删除"}
+    except Exception as e:
+        logger.error(f"删除会话失败: {e}")
+        return {"success": False, "message": str(e)}
+
+
+@app.get("/api/sessions/latest")
+async def get_latest_session(user_id: int = Query(None)):
+    """获取用户最后一个会话及其消息"""
+    if not user_id:
+        return {"success": False, "message": "缺少 user_id", "session": None, "messages": []}
+    try:
+        from sqlClass.chat_session_model import ChatSessionModel, ChatSessionContentModel
+        # 获取用户最后一个会话
+        session_model = ChatSessionModel()
+        latest_session = session_model.get_latest_session_by_user(user_id)
+        
+        if not latest_session:
+            return {"success": True, "has_session": False, "message": "暂无历史会话", "session": None, "messages": []}
+        
+        # 获取该会话的消息
+        content_model = ChatSessionContentModel()
+        contents = content_model.get_contents_by_session(latest_session['id'])
+        
+        messages = []
+        for c in contents:
+            role = c.get('role', 'user')
+            if role == 'assistant':
+                role = 'agent'
+            messages.append({
+                'role': role,
+                'content': c.get('content', ''),
+                'created_at': str(c.get('created_at', ''))
+            })
+        
+        return {
+            "success": True,
+            "has_session": True,
+            "session": {
+                'id': latest_session['id'],
+                'session_name': latest_session.get('session_name', f'会话_{latest_session["id"]}'),
+                'created_at': str(latest_session.get('created_at', ''))
+            },
+            "messages": messages
+        }
+    except Exception as e:
+        logger.error(f"获取最后会话失败: {e}")
+        return {"success": False, "message": str(e), "session": None, "messages": []}
 
 

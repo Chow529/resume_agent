@@ -22,14 +22,14 @@ def get_job_working(user_id: str = None) -> str:
     """
     # 如果没有提供 user_id，返回错误
     if not user_id:
-        return "错误：需要提供 user_id 才能获取简历信息"
+        return "错误：需要提供 user_id 才能获取简历信息,模型无需重试"
     # print(f"user_id: {user_id}")
     try:
         from utils.readyml_tool import load_resume
         userResum = load_resume(int(user_id))
 
         if not userResum:
-            return "无简历信息，请先上传并激活简历"
+            return "无简历信息，请先上传并激活简历,模型无需重试"
 
         resume_text = "\n".join([doc.page_content for doc in userResum])
         resume_content = "简历内容如下:\n" + resume_text
@@ -59,9 +59,9 @@ def get_job_working(user_id: str = None) -> str:
         return contentStr
 
     except (ValueError, TypeError) as e:
-        return f"错误：无效的 user_id {user_id}"
+        return f"错误：无效的 user_id {user_id},模型无需重试"
     except Exception as e:
-        return f"错误：获取简历信息时发生异常 - {str(e)}"
+        return f"错误：获取简历信息时发生异常 - {str(e)},模型无需重试"
 
 
 @tool(description="获取岗位JD信息")
@@ -69,9 +69,8 @@ def get_jd_content(key: str) -> str:
     result = key.split(",")
     # print(f"[get_jd_content] 获取的岗位关键字: {result}")
     content = ""
-
-    for r in result:
-        outputContent = ""
+    outputContent = ""
+    for r in result:  
         content += f"{r} 的 JD 信息如下:\n"
         content_doc = ChromaServer().get_retriever().invoke(r)
         for i, doc in enumerate(content_doc):
@@ -82,7 +81,15 @@ def get_jd_content(key: str) -> str:
 
 @tool(description="返回网页操作教程")
 def get_web_tutorial(key: str) -> str:
-    return ""
+    chroma = ChromaServer(chromaType="user_manual")
+    results = chroma.chroma.similarity_search_with_score(key, k=3)
+    if not results:
+        return "未找到相关教程"
+    docs = [(doc, score) for doc, score in results if score <= 0.5]
+    if not docs:
+        best_doc, best_score = results[0]
+        return f"未找到完全匹配的教程，最接近的内容为:\n{best_doc.page_content}"
+    return "\n\n".join(doc.page_content for doc, _ in docs)
 # if __name__ == "__main__" :
 #     name = get_job_working()
 #     print(name)

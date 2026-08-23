@@ -25,6 +25,10 @@ class ChatSessionModel(BaseModel):
             'session_name': session_name
         }
         return self.create(data)
+    
+    def add_session(self, user_id: int, session_name: str) -> Optional[int]:
+        """添加新会话 (别名，兼容 web_app.py 调用)"""
+        return self.create_session(user_id, session_name)
 
     def get_session_by_id(self, session_id: int) -> Optional[Dict[str, Any]]:
         """通过会话 ID 获取会话"""
@@ -33,14 +37,27 @@ class ChatSessionModel(BaseModel):
     def get_sessions_by_user(self, user_id: int) -> List[Dict[str, Any]]:
         """获取指定用户的所有会话"""
         return self.get_all_by('user_id', user_id)
+    
+    def get_latest_session_by_user(self, user_id: int) -> Optional[Dict[str, Any]]:
+        """获取指定用户的最后一个会话"""
+        sql = f"SELECT * FROM `{self.table_name}` WHERE user_id = %s ORDER BY created_at DESC LIMIT 1"
+        results = self.db.execute_query(sql, (user_id,))
+        return results[0] if results else None
 
     def delete_session(self, session_id: int) -> int:
         """删除会话（外键 ON DELETE CASCADE 会自动删除关联的内容记录）"""
         return self.delete(session_id)
 
-    def update_session(self, session_id: int, name: str) -> int:
-        """更新会话名称"""
-        return self.update(session_id, {'session_name': name})
+    def update_session(self, session_id: int, name: str = None, user_id: int = None) -> int:
+        """更新会话信息"""
+        data = {}
+        if name is not None:
+            data['session_name'] = name
+        if user_id is not None:
+            data['user_id'] = user_id
+        if not data:
+            return 0
+        return self.update(session_id, data)
 
 
 class ChatSessionContentModel(BaseModel):

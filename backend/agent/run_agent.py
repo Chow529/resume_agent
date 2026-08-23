@@ -30,7 +30,7 @@ def build_agent():
 
     agent = create_agent(
         chat_model,
-        tools=[agent_tools.get_job_working, agent_tools.get_jd_content],
+        tools=[agent_tools.get_job_working, agent_tools.get_jd_content, agent_tools.get_web_tutorial],
         system_prompt=system_prompt,
     )
 
