@@ -745,13 +745,25 @@ async def activate_resume(resume_id: int, request: Request):
 
 
 # ─────────────────────────────────────────────────────
-# 主页面路由（保持原有功能）
+# 主页面路由（Vue SPA 构建产物）
 # ─────────────────────────────────────────────────────
+
+# Vue SPA 构建产物目录
+_DIST_DIR = project_root / "frontend" / "dist"
+
+# 挂载静态资源目录（JS/CSS 等）
+if (_DIST_DIR / "assets").is_dir():
+    app.mount("/assets", StaticFiles(directory=str(_DIST_DIR / "assets")), name="static-assets")
+
+
 @app.get("/", response_class=HTMLResponse)
 async def index():
     session_id = str(uuid.uuid4())
     init_session(session_id)
-    html_path = project_root / "frontend" / "index.html"
+    # 优先使用 Vue SPA 构建产物，回退到原始 index.html（开发模式）
+    html_path = _DIST_DIR / "index.html"
+    if not html_path.exists():
+        html_path = project_root / "frontend" / "index.html"
     html_content = html_path.read_text(encoding="utf-8")
     html_content = html_content.replace("{SESSION_ID}", session_id)
     return html_content
@@ -809,7 +821,8 @@ async def init_session_endpoint(session_id: str, user_id: int = Query(None)):
             "created_at": int(time.time()),
             "db_session_id": db_session_id
         }
-    return {"session_id": session_id, "status": "initialized"}
+    stored = _global_sessions.get(session_id, {})
+    return {"session_id": session_id, "status": "initialized", "db_session_id": stored.get("db_session_id")}
 
 
 @app.put("/api/sessions/{session_id}/user")
@@ -1233,19 +1246,13 @@ async def list_user_sessions(user_id: int = Query(None)):
         from sqlClass.chat_session_model import ChatSessionModel
         chat_session_model = ChatSessionModel()
         sessions = chat_session_model.get_sessions_by_user(user_id)
-        # 为每个会话获取消息数量
-        from sqlClass.chat_session_model import ChatSessionContentModel
-        content_model = ChatSessionContentModel()
         result = []
         for s in sessions:
-            contents = content_model.get_contents_by_session(s['id'])
             result.append({
                 'id': s['id'],
                 'session_name': s.get('session_name', f'会话_{s["id"]}'),
-                'message_count': len(contents),
                 'created_at': str(s.get('created_at', '')),
-                'updated_at': str(s.get('updated_at', s.get('created_at', ''))),
-                'last_message': contents[-1]['content'][:80] if contents else ''
+                'updated_at': str(s.get('updated_at', s.get('created_at', '')))
             })
         return {"success": True, "sessions": result}
     except Exception as e:
@@ -1370,5 +1377,18 @@ async def get_latest_session(user_id: int = Query(None)):
     except Exception as e:
         logger.error(f"获取最后会话失败: {e}")
         return {"success": False, "message": str(e), "session": None, "messages": []}
+
+
+# ─────────────────────────────────────────────────────
+# SPA 路由回退（必须放在所有 API 路由之后）
+# ─────────────────────────────────────────────────────
+@app.get("/{path:path}", response_class=HTMLResponse)
+async def spa_fallback(path: str):
+    if path.startswith("api/") or path.startswith("assets/"):
+        raise HTTPException(status_code=404, detail="Not Found")
+    file_path = _DIST_DIR / path
+    if file_path.is_file():
+        return FileResponse(file_path)
+    return await index()
 
 

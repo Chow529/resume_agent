@@ -17,6 +17,7 @@ class ModelFactory (ABC):
 class ChatModelIni (ModelFactory) :
     def InitModel(self) -> BaseChatModel :      
         return cast(BaseChatModel,init_chat_model(model = os.getenv("DEEPSEEK_MODEL"),
+                               model_provider = "openai",
                                base_url= os.getenv("DEEPSEEK_BASE_URL"),
                                api_key = os.getenv("DEEPSEEK_API_KEY"),
                                temperature = 0.7))
