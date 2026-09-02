@@ -10,7 +10,13 @@ import logging
 import io
 import tempfile
 import datetime
+import mimetypes
 from pathlib import Path
+
+# 修复 Windows 注册表缺少 MIME 类型导致 JS 文件以 text/plain 返回的问题
+mimetypes.add_type('application/javascript', '.js')
+mimetypes.add_type('application/javascript', '.mjs')
+mimetypes.add_type('text/css', '.css')
 
 # 确保可以导入项目根目录的模块
 project_root = Path(__file__).parent.parent  # 从 backend/ 回到项目根目录
