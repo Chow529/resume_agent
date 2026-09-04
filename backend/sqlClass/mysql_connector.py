@@ -68,11 +68,24 @@ class MySQLConnector:
             print(f"✗ 连接 MySQL 数据库失败: {e}")
             raise
 
+    def _is_connection_alive(self) -> bool:
+        """检查连接是否有效（发送 ping 探测）"""
+        if self.connection is None:
+            return False
+        # pymysql 用 _closed 整数标记关闭状态（0=打开，非0=关闭）
+        if getattr(self.connection, '_closed', 0) != 0:
+            return False
+        try:
+            self.connection.ping(reconnect=False)
+            return True
+        except Exception:
+            return False
+
     @contextmanager
     def get_cursor(self):
         """获取数据库游标的上下文管理器（自动提交或回滚）"""
-        # 如果连接无效或关闭，尝试重新连接
-        if self.connection is None or getattr(self.connection, 'closed', False):
+        # 连接无效或关闭时，尝试重新连接
+        if not self._is_connection_alive():
             self._connect()
         cursor = None
         try:
@@ -80,8 +93,23 @@ class MySQLConnector:
             yield cursor
             self.connection.commit()  # 默认提交事务
         except Exception as e:
-            if cursor:
-                self.connection.rollback()
+            # 连接断开时，尝试重连后重试一次
+            if not self._is_connection_alive():
+                try:
+                    self._connect()
+                    if cursor:
+                        cursor = self.connection.cursor()
+                        yield cursor
+                        self.connection.commit()
+                        return
+                except Exception:
+                    pass  # 重连失败，继续抛出原始异常
+            # rollback 本身也可能失败（连接已死），吞掉它，不掩盖原始异常
+            try:
+                if cursor:
+                    self.connection.rollback()
+            except Exception:
+                pass
             raise
         finally:
             if cursor:

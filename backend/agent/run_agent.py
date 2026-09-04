@@ -46,7 +46,6 @@ def print_help():
     print("  /end       - 结束面试,回到终端")
     print("  /resume    - 查看当前简历内容")
     print("  /vector xx - 查看向量库中已存储的xx相关JD数量")
-    print("  /history   - 查看对话历史")
     print("  /help      - 打印此帮助信息")
     print("  /quit      - 退出程序")
     print("  直接输入消息 - 与面试 Agent 对话 (需在面试中)")
@@ -99,18 +98,6 @@ def main():
             print("\n面试已结束,回到终端模式。")
             print("输入 /start 重新开始面试,输入 /help 查看更多命令。")
             chat_history.clear()
-            continue
-
-        if user_input == "/history":
-            if not chat_history:
-                print("暂无对话历史。")
-            else:
-                print(f"\n--- 对话历史 ({len(chat_history)} 条) ---")
-                for i, msg in enumerate(chat_history, 1):
-                    role = "用户" if isinstance(msg, HumanMessage) else "Agent"
-                    preview = (msg.content[:100] + "...") if isinstance(msg.content, str) else str(msg.content)[:100]
-                    print(f"  {i}. [{role}] {preview}")
-                print("-" * 30)
             continue
 
         if user_input == "/resume":

@@ -113,7 +113,8 @@ def init_session(session_id: str):
         "chat_history": [],
         "status": "initialized",
         "created_at": int(time.time()),
-        "db_session_id": None
+        "db_session_id": None,
+        "question_count": 0  # 面试对话轮次计数
     }
     _global_sessions[session_id] = session_data
 
@@ -965,6 +966,7 @@ async def chat(session_id: str, request: Request):
             # 清理旧对话历史
             chat_history = session["chat_history"]
             chat_history.clear()
+            session["question_count"] = 0  # 重置轮次计数
 
             # 让 Agent 主导面试流程 - Agent 会自动调用 get_job_working() 获取简历
             chat_history.append(HumanMessage(content=f"开始面试，请先获取我的简历信息,我的user_id是{user_id}"))
@@ -1007,27 +1009,6 @@ async def chat(session_id: str, request: Request):
             "message": end_msg,
             "role": "agent",
             "type": "interview_end",
-            "db_session_id": session.get("db_session_id")
-        }
-
-    elif user_message == "/history":
-        chat_history = session["chat_history"]
-        if not chat_history:
-            message_text = "暂无对话历史。"
-        else:
-            lines = []
-            for i, msg in enumerate(chat_history, 1):
-                role = "用户" if isinstance(msg, HumanMessage) else "Agent"
-                content = msg.content[:100] if isinstance(msg.content, str) else str(msg.content)[:100]
-                lines.append(f"  {i}. [{role}] {content}...")
-            message_text = "\n".join(lines)
-        history_msg = f"\n--- 对话历史 ({len(chat_history)} 条) ---\n{message_text}\n---"
-        save_message_to_db(session_id, "assistant", history_msg)
-        return {
-            "session_id": session_id,
-            "message": history_msg,
-            "role": "agent",
-            "type": "history",
             "db_session_id": session.get("db_session_id")
         }
 
@@ -1104,15 +1085,26 @@ async def chat(session_id: str, request: Request):
     
     chat_history.append(HumanMessage(content=user_message))
 
+    # 面试轮次计数
+    session["question_count"] = session.get("question_count", 0) + 1
+    current_round = session["question_count"]
+
     try:
         agent = get_agent()
         # 注入 user_id 上下文：若 Agent 中途再调 get_job_working 等需要 user_id 的工具,
         # 避免因缺参反复重试导致空跑到 recursion_limit。仅传给本次 invoke, 不写入 chat_history 以免污染历史。
         uid_for_agent = session.get("user_id")
+        agent_messages = []
         if uid_for_agent:
-            agent_messages = [SystemMessage(content=f"当前用户的 user_id 是 {uid_for_agent},调用需要 user_id 的工具时请使用该值。")] + chat_history
-        else:
-            agent_messages = chat_history
+            agent_messages = [SystemMessage(content=f"当前用户的 user_id 是 {uid_for_agent},调用需要 user_id 的工具时请使用该值。")]
+        agent_messages = agent_messages + chat_history
+
+        # 第 9 轮：提示 Agent 这是最后一轮，需汇总评分
+        # if current_round == 10:
+        #     agent_messages.append(SystemMessage(
+        #         content="这是面试的最后一轮提问。请根据候选人到目前为止的全部回答与表现，给出综合汇总评分。"
+        #     ))
+
         response = agent.invoke({"messages": agent_messages})
         messages = response.get("messages", [])
         last_ai = get_last_ai_message(messages)
@@ -1121,6 +1113,28 @@ async def chat(session_id: str, request: Request):
         
         # 保存 Agent 回复到数据库
         save_message_to_db(session_id, "assistant", ai_reply)
+
+        # 第 10 轮：达到上限，自动结束面试
+        if current_round >= 11:
+            #  TODO用其他专业的打分模型进行判断
+            agent_messages.append(HumanMessage(content="以上是我全部的回答,请根据我的回答以及我的表现,给出综合汇总评价以及评分。"))
+            response = agent.invoke({"messages": agent_messages})
+            messages = response.get("messages", [])
+            last_ai = get_last_ai_message(messages)
+            ai_reply = last_ai.content if last_ai else "" 
+            # 保存 Agent 回复到数据库
+            save_message_to_db(session_id, "assistant", ai_reply)
+
+            session["chat_history"] = []
+            session["status"] = "terminated"
+
+            return {
+                "session_id": session_id,
+                "message": ai_reply,
+                "role": "agent",
+                "type": "interview_end",
+                "db_session_id": session.get("db_session_id")
+            }
 
         return {
             "session_id": session_id,

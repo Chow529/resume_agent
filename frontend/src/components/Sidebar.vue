@@ -116,7 +116,6 @@ const creating = ref(false)
 const commandItems = [
   { cmd: '/start', icon: 'fas fa-play', label: '开始面试' },
   { cmd: '/resume', icon: 'fas fa-file-alt', label: '查看简历' },
-  { cmd: '/history', icon: 'fas fa-clock-rotate-left', label: '对话管理' },
   { cmd: '/end', icon: 'fas fa-stop', label: '结束面试' },
 ]
 
