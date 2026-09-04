@@ -1104,16 +1104,6 @@ async def chat(session_id: str, request: Request):
         #     agent_messages.append(SystemMessage(
         #         content="这是面试的最后一轮提问。请根据候选人到目前为止的全部回答与表现，给出综合汇总评分。"
         #     ))
-
-        response = agent.invoke({"messages": agent_messages})
-        messages = response.get("messages", [])
-        last_ai = get_last_ai_message(messages)
-        ai_reply = last_ai.content if last_ai else ""
-        chat_history.append(AIMessage(content=ai_reply))
-        
-        # 保存 Agent 回复到数据库
-        save_message_to_db(session_id, "assistant", ai_reply)
-
         # 第 10 轮：达到上限，自动结束面试
         if current_round >= 11:
             #  TODO用其他专业的打分模型进行判断
@@ -1135,6 +1125,16 @@ async def chat(session_id: str, request: Request):
                 "type": "interview_end",
                 "db_session_id": session.get("db_session_id")
             }
+        response = agent.invoke({"messages": agent_messages})
+        messages = response.get("messages", [])
+        last_ai = get_last_ai_message(messages)
+        ai_reply = last_ai.content if last_ai else ""
+        chat_history.append(AIMessage(content=ai_reply))
+        
+        # 保存 Agent 回复到数据库
+        save_message_to_db(session_id, "assistant", ai_reply)
+
+        
 
         return {
             "session_id": session_id,
