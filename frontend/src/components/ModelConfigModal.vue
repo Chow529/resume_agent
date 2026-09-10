@@ -136,6 +136,15 @@
               <i class="fas fa-undo"></i> 重置
             </button>
             <div class="config-actions-right">
+              <span class="test-hint">测试连接不会消耗 token</span>
+              <button class="cfg-btn" @click="handleTest" :disabled="testing || saving">
+                <template v-if="testing">
+                  <i class="fas fa-spinner fa-spin"></i> 测试中...
+                </template>
+                <template v-else>
+                  <i class="fas fa-plug"></i> 测试连接
+                </template>
+              </button>
               <button class="cfg-btn" @click="handleImport" :disabled="saving">
                 <i class="fas fa-file-import"></i> 导入
               </button>
@@ -163,7 +172,7 @@
 
 <script setup>
 import { ref, reactive, computed, watch, onUnmounted } from 'vue'
-import { loadModelConfig, saveModelConfig, resetModelConfig } from '@/api/index.js'
+import { loadModelConfig, saveModelConfig, resetModelConfig, testModelConfig } from '@/api/index.js'
 
 const props = defineProps({ modelValue: Boolean })
 const emit = defineEmits(['update:modelValue', 'saved'])
@@ -172,6 +181,7 @@ const importInput = ref(null)
 const showApiKey = ref(false)
 const showEmbApiKey = ref(false)
 const saving = ref(false)
+const testing = ref(false)
 
 const form = reactive({
   provider: 'openai',
@@ -258,6 +268,33 @@ async function loadConfig() {
     }
   } catch (e) {
     console.error('加载配置失败', e)
+  }
+}
+
+async function handleTest() {
+  clearErrors()
+  let valid = true
+  if (!form.model_name?.trim()) { errors.model_name = '模型名称不能为空'; valid = false }
+  if (!form.api_key?.trim()) { errors.api_key = 'API Key 不能为空'; valid = false }
+  if (!form.base_url?.trim()) { errors.base_url = 'Base URL 不能为空'; valid = false }
+  if (!valid) return
+
+  testing.value = true
+  try {
+    const res = await testModelConfig({ ...form })
+    if (res.success) {
+      if (res.model_found === false) {
+        showToast(`接口连通，但模型列表中没有「${form.model_name}」，请确认模型名称`, 'error')
+      } else {
+        showToast('连接成功（未消耗 token）')
+      }
+    } else {
+      showToast(res.message || '连接失败', 'error')
+    }
+  } catch (e) {
+    showToast(e?.message || '连接失败', 'error')
+  } finally {
+    testing.value = false
   }
 }
 
@@ -574,7 +611,15 @@ watch(() => props.modelValue, async (val) => {
 
 .config-actions-right {
   display: flex;
+  align-items: center;
+  flex-wrap: wrap;
   gap: var(--spacing-sm);
+}
+
+.test-hint {
+  font-size: 12px;
+  color: var(--color-mute);
+  margin-right: var(--spacing-xs);
 }
 
 .cfg-btn {

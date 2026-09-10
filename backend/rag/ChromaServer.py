@@ -41,8 +41,8 @@ class ChromaServer:
 
         self.spliter = RecursiveCharacterTextSplitter(
             separators=["\n\n", "\n", ""],
-            chunk_size=600,
-            chunk_overlap=100,
+            chunk_size=300,
+            chunk_overlap=200,
             length_function=len
         )
 

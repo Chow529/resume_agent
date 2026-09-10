@@ -3,6 +3,7 @@ import json
 import time
 import threading
 from pathlib import Path
+from typing import Annotated
 
 project_root = Path(__file__).resolve().parent.parent.parent
 
@@ -16,6 +17,7 @@ from rag.ChromaServer import ChromaServer
 from .zhaopin_scraper import get_job_summary
 from langchain.tools import tool
 from utils.logging_tool import logger
+from .tool_Servers import tool_registry
 
 # ========== 岗位爬取缓存 ==========
 # 相同城市+关键词组合在有效期内不重复爬取
@@ -72,12 +74,9 @@ def _bg_scrape_and_store(city: str, keywords: list, cache_key: str):
             _job_bg_thread = None
 
 
-@tool(description="当一次面试开始时,首先会获取该面试者的简历,以获取面试者需要面试的岗位信息")
-def get_job_working(user_id: str = None) -> str:
-    """
-    获取简历中的岗位信息
-    user_id: 可选参数，指定用户ID。如果不传，则返回错误信息
-    """
+@tool_registry.register()
+def get_job_working(user_id: Annotated[str, "当前用户的 user_id，必填，用于读取该用户的激活简历"] = None) -> str:
+    """面试开始时调用：读取面试者简历，提取其意向岗位与意向城市。返回逗号分隔的岗位关键词，最后一个元素为意向城市，可直接作为 get_jd_content 的入参。"""
     if not user_id:
         return "错误：需要提供 user_id 才能获取简历信息,模型无需重试"
     try:
@@ -90,39 +89,37 @@ def get_job_working(user_id: str = None) -> str:
         resume_text = "\n".join([doc.page_content for doc in user_resum])
         resume_content = "简历内容如下:\n" + resume_text
 
-        # [1] LLM 提取岗位关键词
+        # [1] LLM 提取岗位关键词与意向城市
         content_str = JobServies.get_job(resume_text=resume_content)
-        str_list = content_str.split(',')
-        city = str_list[-1].strip()
-        list_kwargs = [k.strip() for k in str_list[:-1]]
 
-        # [2] 检查缓存：有效期内不重复爬取
-        ck = _cache_key(city, list_kwargs)
-        cache = _load_job_cache()
-        cached_time = cache.get(ck, 0)
-        cache_valid = (int(time.time()) - cached_time) < _JOB_CACHE_TTL
+        # [2] 爬虫 + 向量化存储逻辑暂时屏蔽（当前不需要存储 JD 数据）
+        # str_list = content_str.split(',')
+        # city = str_list[-1].strip()
+        # list_kwargs = [k.strip() for k in str_list[:-1]]
+        #
+        # # 检查缓存：有效期内不重复爬取
+        # ck = _cache_key(city, list_kwargs)
+        # cache = _load_job_cache()
+        # cached_time = cache.get(ck, 0)
+        # cache_valid = (int(time.time()) - cached_time) < _JOB_CACHE_TTL
+        #
+        # if not cache_valid:
+        #     # 检查后台线程是否已在运行相同任务
+        #     with _job_bg_lock:
+        #         global _job_bg_thread
+        #         if _job_bg_thread is None or not _job_bg_thread.is_alive():
+        #             # 启动后台线程：爬取 JD + LLM 摘要 + 写入向量库
+        #             _job_bg_thread = threading.Thread(
+        #                 target=_bg_scrape_and_store,
+        #                 args=(city, list_kwargs, ck),
+        #                 daemon=True,
+        #             )
+        #             _job_bg_thread.start()
+        #             logger.info(f"[后台] 已启动爬虫任务: {ck}")
 
-        if cache_valid:
-            logger.info(f"[JD缓存] 命中缓存，跳过爬取: {ck}")
-            return content_str
-
-        # [3] 检查后台线程是否已在运行相同任务
-        with _job_bg_lock:
-            global _job_bg_thread
-            if _job_bg_thread is not None and _job_bg_thread.is_alive():
-                logger.info("[后台] 爬虫任务已在执行中，跳过")
-                return content_str
-
-            # [4] 启动后台线程
-            _job_bg_thread = threading.Thread(
-                target=_bg_scrape_and_store,
-                args=(city, list_kwargs, ck),
-                daemon=True,
-            )
-            _job_bg_thread.start()
-            logger.info(f"[后台] 已启动爬虫任务: {ck}")
-
-        return content_str + "\n[提示] 正在后台获取最新岗位JD数据，稍后查询即可获得更准确的面试内容。"
+        # 仅返回岗位关键词与城市，由模型自行决定是否继续调用 get_jd_content
+        print(content_str)
+        return content_str
 
     except (ValueError, TypeError):
         return f"错误：无效的 user_id {user_id},模型无需重试"
@@ -130,8 +127,9 @@ def get_job_working(user_id: str = None) -> str:
         return f"错误：获取简历信息时发生异常 - {str(e)},模型无需重试"
 
 
-@tool(description="获取岗位JD信息")
-def get_jd_content(key: str) -> str:
+@tool_registry.register()
+def get_jd_content(key: Annotated[str, "岗位关键词，多个岗位用英文逗号分隔，直接传入 get_job_working 的返回值"]) -> str:
+    """获取岗位的详细 JD（职位描述）。在拿到 get_job_working 返回的岗位关键词后调用，key 直接传入该返回结果（多个岗位用英文逗号分隔）。"""
     result = key.split(",")
     content = ""
     output_content = ""
@@ -139,16 +137,18 @@ def get_jd_content(key: str) -> str:
         content += f"{r} 的 JD 信息如下:\n"
         content_doc = ChromaServer().get_retriever().invoke(r)
         if not content_doc:
-            content += "暂无相关JD信息，岗位数据正在后台加载中，请稍后再试。\n\n"
+            content += "暂无相关JD信息。\n\n"
             continue
         for i, doc in enumerate(content_doc):
             content += f"JD 信息{i+1}:\n{doc.page_content}\n\n"
     output_content = SummServer(content, "SUMM_PROMPT").content
+    print(output_content)
     return output_content
 
 
-@tool(description="返回网页操作教程")
-def get_web_tutorial(key: str) -> str:
+@tool_registry.register()
+def get_web_tutorial(key: Annotated[str, "用户关于本系统使用的提问内容"]) -> str:
+    """返回本系统的网页操作教程（使用说明）。"""
     chroma = ChromaServer(chromaType="user_manual")
     results = chroma.chroma.similarity_search_with_score(key, k=3)
     if not results:

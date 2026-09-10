@@ -27,3 +27,8 @@ intents:
     commands: [/vector]
     keywords: [查询jd, 查一下jd, 看看jd, 相关岗位, 岗位信息]
     description: 用户想要查询向量库中的 JD 信息
+
+  help:
+    commands: [/help]
+    keywords: [帮助, 怎么, 帮我，如何]
+    description: 用户想知道如何使用该系统

@@ -172,6 +172,14 @@ export function loadModelConfig() {
   return fetch('/api/config/load').then(handleResponse)
 }
 
+export function testModelConfig(config) {
+  return fetch('/api/config/test', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(config)
+  }).then(handleResponse)
+}
+
 export function saveModelConfig(config) {
   return fetch('/api/config/save', {
     method: 'POST',
