@@ -42,6 +42,27 @@ from model.MoelFactory import ChatModelIni, reload_models, config_ready
 from utils.readyml_tool import load_yaml_config
 from utils.logging_tool import logger
 from typing import Dict, Any, Optional
+
+# ========== 意图识别配置 ==========
+# 从 intent.yml 加载，使用关键字匹配判断用户意图
+_intent_config = load_yaml_config("prompt/intent.yml") or {}
+
+
+def _match_intent(message: str) -> Optional[str]:
+    """基于关键字识别用户意图，未匹配返回 None"""
+    msg_lower = message.strip().lower()
+    for intent, conf in (_intent_config.get("intents") or {}).items():
+        commands = [c.lower() for c in (conf.get("commands") or [])]
+        keywords = [k.lower() for k in (conf.get("keywords") or [])]
+        # 精确匹配指令
+        if msg_lower in commands:
+            return intent
+        # 关键字包含匹配
+        for kw in keywords:
+            if kw in msg_lower:
+                return intent
+    return None
+
 app = FastAPI(title="面试模拟 Agent Web版", version="1.0.0")
 
 # 全局变量
@@ -98,20 +119,39 @@ def get_chroma_server():
 
 
 def build_agent():
-    """构建Agent实例"""
+    """构建 Agent（LangGraph 版本）"""
     prompt = load_yaml_config("prompt/prompt.yml")
     if prompt is None:
         raise FileNotFoundError("未找到 prompt/prompt.yml 配置文件")
     system_prompt = prompt.get("MAIN_PROMPT", "")
-    from langchain.agents import create_agent
-    chat_model = ChatModelIni().InitModel()
-    agent = create_agent(
-        chat_model,
-        tools=[agent_tools.get_job_working, agent_tools.get_jd_content,agent_tools.get_web_tutorial],
-        system_prompt=system_prompt,
-        # config={"recursion_limit": 8}
+    chat_model = ChatModelIni().InitModel().bind_tools(
+        [agent_tools.get_job_working, agent_tools.get_jd_content, agent_tools.get_web_tutorial]
     )
-    return agent
+
+    from langgraph.graph import StateGraph, START, END
+    from langgraph.prebuilt import ToolNode
+    from typing import TypedDict, Annotated
+    from langgraph.graph.message import add_messages
+
+    class InterviewState(TypedDict):
+        messages: Annotated[list, add_messages]
+
+    def call_model(state):
+        messages = [SystemMessage(content=system_prompt)] + state["messages"]
+        return {"messages": [chat_model.invoke(messages)]}
+
+    def should_continue(state):
+        if isinstance(state["messages"][-1], AIMessage) and state["messages"][-1].tool_calls:
+            return "tools"
+        return END
+
+    graph = StateGraph(InterviewState)
+    graph.add_node("agent", call_model)
+    graph.add_node("tools", ToolNode([agent_tools.get_job_working, agent_tools.get_jd_content, agent_tools.get_web_tutorial]))
+    graph.add_edge(START, "agent")
+    graph.add_conditional_edges("agent", should_continue, {"tools": "tools", END: END})
+    graph.add_edge("tools", "agent")
+    return graph.compile()
 
 
 def init_session(session_id: str):
@@ -964,8 +1004,10 @@ async def chat(session_id: str, request: Request):
     # 保存用户消息到数据库（无论是否特殊命令）
     save_message_to_db(session_id, "user", user_message)
 
-    # 处理特殊命令
-    if user_message == "/start":
+    # ── 意图识别：只有意图明确才进入对应的流程逻辑 ──
+    intent = _match_intent(user_message)
+
+    if intent == "start_interview":
         try:
             session = _global_sessions[session_id]
             user_id = session.get("user_id")
@@ -989,7 +1031,7 @@ async def chat(session_id: str, request: Request):
             chat_history.append(HumanMessage(content=f"开始面试，请先获取我的简历信息,我的user_id是{user_id}"))
 
             agent = get_agent()
-            response = agent.invoke({"messages": chat_history},config={"recursion_limit": 8})
+            response = await asyncio.to_thread(agent.invoke, {"messages": chat_history})
             messages = response.get("messages", [])
             last_ai = get_last_ai_message(messages)
             ai_reply = last_ai.content if last_ai and isinstance(last_ai.content, str) else ""
@@ -1016,7 +1058,7 @@ async def chat(session_id: str, request: Request):
                 "db_session_id": session.get("db_session_id")
             }
 
-    elif user_message == "/end":
+    elif intent == "end_interview":
         session["chat_history"] = []
         session["status"] = "terminated"
         end_msg = "面试已结束，可以输入 /start 重新开始"
@@ -1029,7 +1071,7 @@ async def chat(session_id: str, request: Request):
             "db_session_id": session.get("db_session_id")
         }
 
-    elif user_message == "/resume":
+    elif intent == "view_resume":
         session = _global_sessions[session_id]
         user_id = session.get("user_id")
         
@@ -1064,9 +1106,10 @@ async def chat(session_id: str, request: Request):
             "db_session_id": session.get("db_session_id")
         }
 
-    elif user_message.startswith("/vector"):
+    elif intent == "query_vector":
         try:
             retriever = get_chroma_server().get_retriever()
+            # 提取关键词：优先用 /vector 后的参数，否则用整条消息
             jd_parts = [x.strip() for x in user_message.split(" ") if x.strip()]
             if len(jd_parts) > 1:
                 all_docs = retriever.invoke(jd_parts[-1])
@@ -1125,7 +1168,7 @@ async def chat(session_id: str, request: Request):
         if current_round >= 11:
             #  TODO用其他专业的打分模型进行判断
             agent_messages.append(HumanMessage(content="以上是我全部的回答,请根据我的回答以及我的表现,给出综合汇总评价以及评分。"))
-            response = agent.invoke({"messages": agent_messages})
+            response = await asyncio.to_thread(agent.invoke, {"messages": agent_messages})
             messages = response.get("messages", [])
             last_ai = get_last_ai_message(messages)
             ai_reply = last_ai.content if last_ai else "" 
@@ -1142,7 +1185,7 @@ async def chat(session_id: str, request: Request):
                 "type": "interview_end",
                 "db_session_id": session.get("db_session_id")
             }
-        response = agent.invoke({"messages": agent_messages})
+        response = await asyncio.to_thread(agent.invoke, {"messages": agent_messages})
         messages = response.get("messages", [])
         last_ai = get_last_ai_message(messages)
         ai_reply = last_ai.content if last_ai else ""

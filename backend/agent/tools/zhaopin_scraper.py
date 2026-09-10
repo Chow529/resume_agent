@@ -145,13 +145,14 @@ def parse_job(pos: dict) -> dict:
     }
 
 
-def scrape_all(city_name: str, keywords: list) -> list:
+def scrape_all(city_name: str, keywords: list, time_budget: int = 60) -> list:
     """
     主爬取逻辑
     
     Args:
         city_name: 城市名称，如 "成都"
         keywords: 搜索关键词列表，如 ["AI智能体", "AI Agent"]
+        time_budget: 爬取时间预算（秒），超时立即返回已收集的数据
     
     Returns:
         list: 职位数据列表
@@ -163,11 +164,17 @@ def scrape_all(city_name: str, keywords: list) -> list:
         print(f"   支持的城市列表: {', '.join(CITY_CODE_MAP.keys())}")
         return []
     
+    start_time = time.time()
     all_jobs = {}  # 用 jobId 去重
     total_pages = 0
     total_positions = 0
 
     for keyword in keywords:
+        # 时间预算检查：超时则停止爬取，返回已收集数据
+        if time.time() - start_time > time_budget:
+            print(f"⏰ 爬取时间超过预算 {time_budget}s，提前结束，已收集 {len(all_jobs)} 条数据")
+            break
+
         print(f"\n{'='*60}")
         print(f"搜索关键词: {keyword}")
         print(f"{'='*60}")
@@ -180,7 +187,6 @@ def scrape_all(city_name: str, keywords: list) -> list:
 
         position_count = state.get("positionCount", 0)
         pages = state.get("pages", 1)
-        # print(f"  📊 共找到 {position_count} 个职位，{pages} 页")
 
         # 处理第一页
         for pos in state.get("positionList", []):
@@ -195,11 +201,13 @@ def scrape_all(city_name: str, keywords: list) -> list:
 
         # 获取后续页面
         for page in range(2, pages + 1):
-            # print(f"  🔄 正在获取第 {page}/{pages} 页...")
+            # 时间预算检查：超时则停止爬取
+            if time.time() - start_time > time_budget:
+                print(f"⏰ 爬取时间超过预算 {time_budget}s，提前结束，已收集 {len(all_jobs)} 条数据")
+                break
             time.sleep(REQUEST_DELAY)
             state = search_jobs(keyword, city_code, page=page)
             if not state:
-                # print(f"  ⚠️ 第 {page} 页获取失败，跳过")
                 continue
             for pos in state.get("positionList", []):
                 job_id = pos.get("jobId") or pos.get("number") or pos.get("uuid")
@@ -210,7 +218,6 @@ def scrape_all(city_name: str, keywords: list) -> list:
 
         time.sleep(REQUEST_DELAY)
 
-    # print(f"\n✅ 爬取完成！共获取 {len(all_jobs)} 条去重职位数据")
     return list(all_jobs.values())
 
 
@@ -237,7 +244,7 @@ def save_csv(jobs: list, filename: str):
     # print(f"📊 共 {len(jobs)} 条职位数据")
 
 
-def get_job_summary(city_name: str, keywords: list, output_filename: str = None):
+def get_job_summary(city_name: str, keywords: list, output_filename: str = None, time_budget: int = 60):
     """
     灵活的任务总结函数
     
@@ -245,6 +252,7 @@ def get_job_summary(city_name: str, keywords: list, output_filename: str = None)
         city_name: 城市名称（中文），如 "成都"
         keywords: 搜索关键词列表，如 ["AI智能体", "AI Agent", "大模型 agent"]
         output_filename: 输出文件名（可选），如不指定则自动生成
+        time_budget: 爬取时间预算（秒），默认 60 秒，超时使用已收集数据
     
     Returns:
         dict: 包含职位列表和统计信息的字典
@@ -266,7 +274,7 @@ def get_job_summary(city_name: str, keywords: list, output_filename: str = None)
     print("=" * 70)
 
     # 爬取数据 (静默模式,不打印进度)
-    jobs = scrape_all(city_name, keywords)
+    jobs = scrape_all(city_name, keywords, time_budget=time_budget)
 
     if not jobs:
         return {"jobs": [], "stats": {}}

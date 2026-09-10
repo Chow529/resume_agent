@@ -1,0 +1,29 @@
+# 意图识别配置
+# chat 接口会先用这些关键字对用户消息做意图识别，
+# 只有匹配到对应意图才进入对应的流程逻辑（如 /start 面试流程）。
+# 未匹配任何意图的消息将作为普通对话交给 Agent 处理。
+
+intents:
+  # 开始面试
+  start_interview:
+    commands: [/start]
+    keywords: [开始面试, 进行面试, 我要面试, 开始吧, 面试开始, 开始提问, 开始]
+    description: 用户明确表达想要开始面试
+
+  # 结束面试
+  end_interview:
+    commands: [/end]
+    keywords: [结束面试, 停止面试, 面试结束, 不面了, 再见面试, 结束吧]
+    description: 用户明确表达想要结束面试
+
+  # 查看简历
+  view_resume:
+    commands: [/resume]
+    keywords: [查看简历, 我的简历, 简历内容]
+    description: 用户想要查看当前激活的简历
+
+  # 查询向量库 JD
+  query_vector:
+    commands: [/vector]
+    keywords: [查询jd, 查一下jd, 看看jd, 相关岗位, 岗位信息]
+    description: 用户想要查询向量库中的 JD 信息

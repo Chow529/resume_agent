@@ -113,6 +113,58 @@ class ChromaServer:
         if idsList:
             self.chroma.add_texts(texts=listStr, ids=idsList)
 
+    def batch_storage(self, contents: list[str]):
+        """
+        批量存储文本到向量库（优化版本，减少 IO 和 Embedding 调用次数）
+        
+        :param contents: 文本信息列表
+        :type contents: list[str]
+        """
+        # 确保 MD5 文件存在
+        self._ensure_md5_file()
+        
+        # 一次性加载所有已存在的 MD5 到 set 中（O(1) 查找）
+        existing_md5s = set()
+        try:
+            with open(MD5PATH, 'r', encoding='utf-8') as f:
+                for line in f:
+                    if line.strip():
+                        existing_md5s.add(line.strip())
+        except Exception as e:
+            logger.error(f"加载 MD5 文件失败: {e}")
+        
+        all_texts = []
+        all_ids = []
+        new_md5s = []
+        
+        # 处理所有文本
+        for content in contents:
+            chunks = self.spliter.split_text(content)
+            for chunk in chunks:
+                md5 = self.ChangeToMd5(chunk)
+                if md5 not in existing_md5s:
+                    all_texts.append(chunk)
+                    all_ids.append(md5)
+                    new_md5s.append(md5)
+                    existing_md5s.add(md5)  # 避免同一批次内重复
+        
+        # 批量写入向量库（按 Embedding API 上限分批，每次最多 20 条）
+        if all_texts:
+            BATCH_SIZE = 20  # 向量模型 API 单次请求的 batch 上限
+            for i in range(0, len(all_texts), BATCH_SIZE):
+                batch_texts = all_texts[i:i + BATCH_SIZE]
+                batch_ids = all_ids[i:i + BATCH_SIZE]
+                self.chroma.add_texts(texts=batch_texts, ids=batch_ids)
+            logger.info(f"批量写入向量库：{len(all_texts)} 个文本块")
+            
+            # 批量写入 MD5 文件（一次写入）
+            try:
+                with open(MD5PATH, 'a', encoding='utf-8') as f:
+                    for md5 in new_md5s:
+                        f.write(md5 + "\n")
+            except Exception as e:
+                logger.error(f"批量写入 MD5 失败: {e}")
+
     def __storageMd5(self, md5: str):
         """
         存储md5值,将文本转化成md5值进行存储(去重使用)
