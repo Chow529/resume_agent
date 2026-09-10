@@ -161,3 +161,27 @@ export function deleteKbDocument(docId) {
     method: 'DELETE'
   }).then(handleResponse)
 }
+
+// ========== Model Config APIs ==========
+
+export function checkConfigStatus() {
+  return fetch('/api/config/status').then(handleResponse)
+}
+
+export function loadModelConfig() {
+  return fetch('/api/config/load').then(handleResponse)
+}
+
+export function saveModelConfig(config) {
+  return fetch('/api/config/save', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(config)
+  }).then(handleResponse)
+}
+
+export function resetModelConfig() {
+  return fetch('/api/config/reset', {
+    method: 'POST'
+  }).then(handleResponse)
+}

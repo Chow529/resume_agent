@@ -3,14 +3,17 @@ import { ref, computed, watch, nextTick, onMounted } from 'vue'
 import { useChatStore } from '@/stores/chat.js'
 import { useAuthStore } from '@/stores/auth.js'
 import { useSessionStore } from '@/stores/session.js'
+import { useConfigStore } from '@/stores/config.js'
+import { emit as busEmit } from '@/utils/events.js'
 import MessageItem from './MessageItem.vue'
 import VoiceModal from './VoiceModal.vue'
 
-const emit = defineEmits(['open-help', 'open-kb', 'open-user-manage'])
+const emit = defineEmits(['open-help', 'open-kb', 'open-user-manage', 'open-model-config'])
 
 const chatStore = useChatStore()
 const authStore = useAuthStore()
 const sessionStore = useSessionStore()
+const configStore = useConfigStore()
 
 const inputText = ref('')
 const showVoiceModal = ref(false)
@@ -56,10 +59,19 @@ onMounted(() => scrollToBottom())
 // 发送消息
 function sendMessage() {
   const text = inputText.value.trim()
-  if (!text || !canSend.value) return
+  if (!text) return
+  if (!configStore.configReady) {
+    chatStore.addMessage('assistant', '⚠️ 请先完成 AI 模型配置后再使用该功能。[点击配置](open-config)')
+    return
+  }
+  if (!canSend.value) return
   chatStore.sendMessage(text)
   inputText.value = ''
   resetTextareaHeight()
+}
+
+function openConfigModal() {
+  busEmit('open-config')
 }
 
 // textarea 键盘处理
@@ -123,6 +135,13 @@ function handleVoiceRecognized(text) {
         </button>
         <button
           class="top-bar-btn"
+          @click="emit('open-model-config')"
+          title="AI 模型配置"
+        >
+          <i class="fas fa-sliders-h"></i> 模型配置
+        </button>
+        <button
+          class="top-bar-btn"
           :disabled="!isAuthenticated"
           @click="emit('open-kb')"
         >
@@ -136,6 +155,13 @@ function handleVoiceRecognized(text) {
           <i class="fas fa-question-circle"></i> 帮助文档
         </button>
       </div>
+    </div>
+
+    <!-- AI 模型未配置警告 -->
+    <div v-if="!configStore.configReady" class="config-warning">
+      <i class="fas fa-exclamation-triangle"></i>
+      <span>AI 模型尚未配置，无法使用对话功能。</span>
+      <a href="#" @click.prevent="openConfigModal">立即配置 →</a>
     </div>
 
     <!-- 消息区域 -->
@@ -269,6 +295,35 @@ function handleVoiceRecognized(text) {
 .top-bar-btn:disabled {
   opacity: 0.4;
   cursor: not-allowed;
+}
+
+/* AI 模型未配置警告 */
+.config-warning {
+  display: flex;
+  align-items: center;
+  gap: var(--spacing-sm);
+  padding: var(--spacing-sm) var(--spacing-xl);
+  background: rgba(251, 191, 36, 0.08);
+  border-bottom: 1px solid rgba(251, 191, 36, 0.3);
+  color: #fbbf24;
+  font-size: 13px;
+  flex-shrink: 0;
+}
+
+.config-warning i {
+  flex-shrink: 0;
+}
+
+.config-warning a {
+  color: var(--color-primary);
+  text-decoration: none;
+  font-weight: 600;
+  margin-left: auto;
+  white-space: nowrap;
+}
+
+.config-warning a:hover {
+  text-decoration: underline;
 }
 
 /* 消息区域 */

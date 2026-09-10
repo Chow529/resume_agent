@@ -1,8 +1,10 @@
 <script setup>
-import { ref, watch, onMounted } from 'vue'
+import { ref, watch, onMounted, onUnmounted } from 'vue'
 import { useAuthStore } from '@/stores/auth.js'
 import { useSessionStore } from '@/stores/session.js'
 import { useChatStore } from '@/stores/chat.js'
+import { useConfigStore } from '@/stores/config.js'
+import { on as busOn, off as busOff } from '@/utils/events.js'
 
 import Sidebar from '@/components/Sidebar.vue'
 import ChatPanel from '@/components/ChatPanel.vue'
@@ -12,10 +14,12 @@ import UserManageModal from '@/components/UserManageModal.vue'
 import UploadResumeModal from '@/components/UploadResumeModal.vue'
 import ManageResumeModal from '@/components/ManageResumeModal.vue'
 import KbModal from '@/components/KbModal.vue'
+import ModelConfigModal from '@/components/ModelConfigModal.vue'
 
 const authStore = useAuthStore()
 const sessionStore = useSessionStore()
 const chatStore = useChatStore()
+const configStore = useConfigStore()
 
 // 模态框状态
 const showAuth = ref(false)
@@ -24,11 +28,22 @@ const showUserManage = ref(false)
 const showUploadResume = ref(false)
 const showManageResume = ref(false)
 const showKb = ref(false)
+const showModelConfig = ref(false)
 
-// 初始化：认证后加载会话，登出后重新弹出登录框
+function openModelConfig() {
+  showModelConfig.value = true
+}
+
+// 监听全局事件：其他组件触发"打开配置"
+busOn('open-config', openModelConfig)
+onUnmounted(() => busOff('open-config', openModelConfig))
+
+// 认证后：加载会话 + 检查配置，未配置时自动弹出配置页
 watch(() => authStore.isAuthenticated, async (val) => {
   if (val) {
     await sessionStore.initAndLoad()
+    const ready = await configStore.checkConfig()
+    if (!ready) openModelConfig()
   } else {
     showAuth.value = true
   }
@@ -38,6 +53,8 @@ onMounted(async () => {
   if (authStore.isAuthenticated) {
     await authStore.loadUserInfo()
     await sessionStore.initAndLoad()
+    const ready = await configStore.checkConfig()
+    if (!ready) openModelConfig()
   } else {
     showAuth.value = true
   }
@@ -73,6 +90,11 @@ function openManageResume() {
 function handleResumeUploaded() {
   chatStore.addMessage('assistant', '简历上传成功！您可以开始面试了。')
 }
+
+// 配置保存成功后刷新状态
+function handleConfigSaved() {
+  configStore.checkConfig()
+}
 </script>
 
 <template>
@@ -85,6 +107,7 @@ function handleResumeUploaded() {
       @open-help="openHelp"
       @open-kb="openKb"
       @open-user-manage="openUserManage"
+      @open-model-config="openModelConfig"
     />
   </div>
 
@@ -95,6 +118,7 @@ function handleResumeUploaded() {
   <UploadResumeModal v-model="showUploadResume" @uploaded="handleResumeUploaded" />
   <ManageResumeModal v-model="showManageResume" />
   <KbModal v-model="showKb" />
+  <ModelConfigModal v-model="showModelConfig" @saved="handleConfigSaved" />
 </template>
 
 <style scoped>

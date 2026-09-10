@@ -101,6 +101,8 @@ import { computed, ref } from 'vue'
 import { useAuthStore } from '@/stores/auth.js'
 import { useSessionStore } from '@/stores/session.js'
 import { useChatStore } from '@/stores/chat.js'
+import { useConfigStore } from '@/stores/config.js'
+import { emit as busEmit } from '@/utils/events.js'
 
 const props = defineProps({
   disabled: { type: Boolean, default: false }
@@ -110,6 +112,7 @@ const emit = defineEmits(['open-upload-resume', 'open-manage-resume'])
 const authStore = useAuthStore()
 const sessionStore = useSessionStore()
 const chatStore = useChatStore()
+const configStore = useConfigStore()
 
 const creating = ref(false)
 
@@ -128,11 +131,20 @@ const statusDotClass = computed(() => {
 
 function sendCommand(cmd) {
   if (!authStore.isAuthenticated || sessionStore.loading) return
+  if (!configStore.configReady) {
+    chatStore.addMessage('assistant', '⚠️ 请先完成 AI 模型配置后再使用该功能。[点击配置](open-config)')
+    busEmit('open-config')
+    return
+  }
   chatStore.sendMessage(cmd)
 }
 
 async function newSession() {
   if (creating.value || sessionStore.loading) return
+  if (!configStore.configReady) {
+    busEmit('open-config')
+    return
+  }
   creating.value = true
   try {
     await sessionStore.createNewSession()

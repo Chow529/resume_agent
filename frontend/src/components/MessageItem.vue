@@ -1,6 +1,7 @@
 <script setup>
 import { computed } from 'vue'
 import { escapeHtml } from '@/utils/index.js'
+import { emit as busEmit } from '@/utils/events.js'
 
 const props = defineProps({
   role: { type: String, required: true, validator: v => ['user', 'assistant', 'agent'].includes(v) },
@@ -9,7 +10,21 @@ const props = defineProps({
 
 const displayRole = computed(() => props.role === 'assistant' ? 'agent' : props.role)
 
-const escapedContent = computed(() => escapeHtml(props.content))
+// 将 [文本](open-config) 转为可点击链接
+const displayContent = computed(() => {
+  const escaped = escapeHtml(props.content)
+  return escaped.replace(
+    /\[([^\]]+)\]\(open-config\)/g,
+    '<a href="#" class="open-config-link">$1</a>'
+  )
+})
+
+function handleClick(e) {
+  if (e.target.classList.contains('open-config-link')) {
+    e.preventDefault()
+    busEmit('open-config')
+  }
+}
 </script>
 
 <template>
@@ -18,7 +33,7 @@ const escapedContent = computed(() => escapeHtml(props.content))
       <i :class="displayRole === 'user' ? 'fas fa-user' : 'fas fa-robot'"></i>
       {{ displayRole === 'user' ? '你' : 'Agent' }}
     </div>
-    <div class="message-content" v-html="escapedContent"></div>
+    <div class="message-content" v-html="displayContent" @click="handleClick"></div>
   </div>
 </template>
 
@@ -75,6 +90,16 @@ const escapedContent = computed(() => escapeHtml(props.content))
   color: var(--color-ink);
   border: 1px solid var(--color-hairline);
   border-bottom-left-radius: 2px;
+}
+
+.message-content :deep(.open-config-link) {
+  color: var(--color-primary);
+  text-decoration: none;
+  font-weight: 600;
+}
+
+.message-content :deep(.open-config-link:hover) {
+  text-decoration: underline;
 }
 
 @keyframes slideIn {

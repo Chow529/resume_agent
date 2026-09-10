@@ -38,7 +38,7 @@ import asyncio
 # 导入（所有模块都在项目根目录下）
 from rag.ChromaServer import ChromaServer
 from agent.tools import agent_tools
-from model.MoelFactory import ChatModelIni
+from model.MoelFactory import ChatModelIni, reload_models, config_ready
 from utils.readyml_tool import load_yaml_config
 from utils.logging_tool import logger
 from typing import Dict, Any, Optional
@@ -81,6 +81,13 @@ def get_agent():
     if _agent is None:
         _agent = build_agent()
     return _agent
+
+
+def reload_agent():
+    """清除全局 Agent 缓存，下次调用 get_agent() 时根据最新 config.json 重建"""
+    global _agent
+    _agent = None
+    reload_models()
 
 
 def get_chroma_server():
@@ -924,6 +931,16 @@ async def chat(session_id: str, request: Request):
     if not user_message:
         raise HTTPException(status_code=400, detail="消息内容不能为空")
 
+    # 检查 AI 模型是否已配置
+    if not config_ready():
+        return {
+            "session_id": session_id,
+            "message": "[AI 模型未配置] 请先完成 AI 模型配置后再使用该功能",
+            "role": "error",
+            "type": "config_required",
+            "db_session_id": None
+        }
+
     session = _global_sessions[session_id]
     # 将 user_id 绑定到会话（前端每次发消息时带上）
     uid = data.get("user_id")
@@ -1400,6 +1417,90 @@ async def get_latest_session(user_id: int = Query(None)):
 
 
 # ─────────────────────────────────────────────────────
+# AI 模型配置管理 API
+# ─────────────────────────────────────────────────────
+import json
+
+CONFIG_FILE = project_root / "config.json"
+
+
+@app.get("/api/config/status")
+async def get_config_status():
+    """返回当前是否已完成 AI 模型配置"""
+    ready = config_ready()
+    return {"success": True, "ready": ready}
+
+
+@app.get("/api/config/load")
+async def load_config():
+    """从 config.json 加载已保存的模型配置"""
+    if not CONFIG_FILE.is_file():
+        return {"success": True, "config": None, "message": "暂无已保存的配置"}
+    try:
+        with open(CONFIG_FILE, "r", encoding="utf-8") as f:
+            config = json.load(f)
+        return {"success": True, "config": config}
+    except Exception as e:
+        logger.error(f"读取配置文件失败: {e}")
+        return {"success": False, "message": f"读取配置失败: {str(e)}"}
+
+
+@app.post("/api/config/save")
+async def save_config(request: Request):
+    """保存模型配置到 config.json，并重新加载后端模型实例"""
+    try:
+        data = await request.json()
+        config = {
+            "provider": data.get("provider", "openai"),
+            "model_name": data.get("model_name", ""),
+            "api_key": data.get("api_key", ""),
+            "base_url": data.get("base_url", ""),
+            "temperature": data.get("temperature", 0.7),
+            "max_tokens": data.get("max_tokens", 4096),
+            "embedding_model": data.get("embedding_model", ""),
+            "embedding_separate": data.get("embedding_separate", False),
+            "embedding_provider": data.get("embedding_provider", "openai"),
+            "embedding_api_key": data.get("embedding_api_key", ""),
+            "embedding_base_url": data.get("embedding_base_url", ""),
+        }
+        if not config["model_name"]:
+            return {"success": False, "message": "模型名称不能为空"}
+        if not config["api_key"]:
+            return {"success": False, "message": "API Key 不能为空"}
+        if not config["base_url"]:
+            return {"success": False, "message": "Base URL 不能为空"}
+        try:
+            temp = float(config["temperature"])
+            if not (0 <= temp <= 2):
+                return {"success": False, "message": "温度值需在 0~2 之间"}
+        except (ValueError, TypeError):
+            return {"success": False, "message": "温度值必须为数字"}
+        with open(CONFIG_FILE, "w", encoding="utf-8") as f:
+            json.dump(config, f, ensure_ascii=False, indent=2)
+        # 重新加载模型实例，使新配置立即生效
+        reload_agent()
+        return {"success": True, "message": "配置已保存，模型已重新加载"}
+    except json.JSONDecodeError:
+        return {"success": False, "message": "请求数据格式错误"}
+    except Exception as e:
+        logger.error(f"保存配置失败: {e}", exc_info=True)
+        return {"success": False, "message": f"保存失败: {str(e)}"}
+
+
+@app.post("/api/config/reset")
+async def reset_config(request: Request):
+    """重置配置：删除 config.json，清除模型缓存"""
+    try:
+        if CONFIG_FILE.is_file():
+            CONFIG_FILE.unlink()
+        reload_agent()
+        return {"success": True, "message": "配置已重置，请重新完成 AI 模型配置"}
+    except Exception as e:
+        logger.error(f"重置配置失败: {e}")
+        return {"success": False, "message": f"重置失败: {str(e)}"}
+
+
+# ─────────────────────────────────────────────────────
 # SPA 路由回退（必须放在所有 API 路由之后）
 # ─────────────────────────────────────────────────────
 @app.get("/{path:path}", response_class=HTMLResponse)
@@ -1410,5 +1511,10 @@ async def spa_fallback(path: str):
     if file_path.is_file():
         return FileResponse(file_path)
     return await index()
+
+
+if __name__ == "__main__":
+    import uvicorn
+    uvicorn.run(app, host="127.0.0.1", port=8000)
 
 

@@ -1,14 +1,15 @@
 # 面试模拟 Agent (Interview Agent)
 
-基于 LangGraph + RAG 的智能面试模拟系统，支持 **Web 界面** 和 **终端交互** 两种使用方式，集成用户认证、简历管理、语音输入、会话持久化和知识库检索。
+基于 LangGraph + RAG 的智能面试模拟系统，支持 **Web 界面** 和 **终端交互** 两种使用方式，集成用户认证、简历管理、语音输入、会话持久化、知识库检索和在线模型配置。
 
 ## 功能特性
 
-- **用户认证系统**：注册/登录/登出，支持会话保持
-- **简历管理**：上传 PDF/DOCX 简历（每人最多 3 份），自动激活与切换
+- **AI 模型在线配置**：通过 Web 界面配置大模型（支持任意 OpenAI 兼容接口），保存后立即生效，无需重启
+- **用户认证系统**：注册/登录/登出，支持会话保持、账户锁定保护
+- **简历管理**：上传 PDF/DOCX 简历（每人最多 3 份），自动解析文本、激活与切换
 - **语音识别**：基于 Web Speech API 的麦克风输入，支持 Chrome/Edge/Safari
 - **多会话管理**：创建/重命名/删除对话历史，登录自动加载最近会话
-- **智能面试流程**：Agent 自动获取简历 → 检索 JD → 生成面试问题 → 评估回答
+- **智能面试流程**：Agent 自动获取简历 → 检索 JD → 生成面试问题 → 综合评分
 - **RAG 知识库**：向量化存储 QA 条目，支持可视化管理（添加/删除/浏览）
 - **终端交互**：无需浏览器，命令行直接体验 Agent 能力
 - **MySQL 持久化**：用户、会话、消息、简历数据全量存储
@@ -21,10 +22,11 @@
 | Agent 框架 | LangChain + LangGraph |
 | 数据库 | MySQL (PyMySQL) |
 | 向量库 | ChromaDB |
-| 大模型 | DeepSeek (可配置) |
+| 大模型 | 任意 OpenAI 兼容接口（通过 Web UI 配置） |
 | 前端框架 | Vue 3 (Composition API) + Pinia |
 | 构建工具 | Vite 5 |
 | 语音识别 | Web Speech API |
+| 简历解析 | MarkItDown |
 | 服务器 | Uvicorn (ASGI) |
 
 ## 项目结构
@@ -36,47 +38,45 @@ resume_agent/
 │   ├── agent/
 │   │   ├── run_agent.py             # 终端交互版入口
 │   │   └── tools/
-│   │       ├── agent_tools.py       # Agent 工具（简历获取、JD抓取）
+│   │       ├── agent_tools.py       # Agent 工具（简历获取、JD抓取、教程获取）
 │   │       └── zhaopin_scraper.py   # 招聘网站爬虫
 │   ├── rag/
 │   │   ├── ChromaServer.py          # ChromaDB 向量库管理
 │   │   └── ModelServer.py           # 嵌入模型服务
 │   ├── model/
-│   │   └── MoelFactory.py           # 模型工厂
+│   │   └── MoelFactory.py           # 模型工厂（从 config.json 加载）
 │   ├── prompt/
 │   │   └── prompt.yml               # Agent 系统提示词
 │   ├── manual/
 │   │   ├── manual_to_vector.py      # 文档向量化处理
-│   │   └── user_manual.md           # 用户手册（向量化源）
+│   │   ├── user_manual.md           # 用户手册（向量化源）
+│   │   └── QA.md                    # QA 知识条目
 │   ├── sqlClass/
 │   │   ├── chat_session_model.py    # 会话数据模型
-│   │   ├── mysql_connector.py       # MySQL 连接管理
+│   │   ├── mysql_connector.py       # MySQL 连接管理 & 用户模型
 │   │   └── resume_model.py          # 简历数据模型
 │   ├── sql/                         # 数据库建表 SQL
 │   │   ├── users_*.sql
 │   │   ├── chat_sessions_*.sql
 │   │   ├── chat_session_contents_*.sql
-│   │   └── user_resumes_*.sql
+│   │   └── user_resumes_sql.sql
 │   └── utils/
-│       ├── file_utils.py
-│       ├── logging_tool.py
-│       ├── path_tool.py
-│       └── readyml_tool.py         # YAML/PDF 读取
+│       ├── file_utils.py            # 文件操作
+│       ├── logging_tool.py          # 日志工具
+│       ├── path_tool.py             # 路径工具
+│       └── readyml_tool.py          # YAML/PDF 读取
 ├── frontend/                        # Vue.js 前端
 │   ├── index.html                   # Vite 入口 HTML
 │   ├── package.json                 # 前端依赖定义
 │   ├── vite.config.js               # Vite 构建配置
 │   ├── DESIGN.md                    # UI 设计规范
-│   ├── dist/                        # 构建产物（生产模式）
-│   │   ├── index.html
-│   │   └── assets/
-│   │       ├── index-*.js
-│   │       └── index-*.css
+│   ├── static/
+│   │   └── favicon.ico              # 网站图标
 │   └── src/
 │       ├── main.js                  # Vue 应用入口
 │       ├── App.vue                  # 根组件
 │       ├── api/
-│       │   └── index.js             # 后端 API 封装（23 个接口）
+│       │   └── index.js             # 后端 API 封装（27 个接口）
 │       ├── components/
 │       │   ├── AuthModal.vue        # 登录/注册弹窗
 │       │   ├── ChatPanel.vue        # 聊天主面板
@@ -87,7 +87,8 @@ resume_agent/
 │       │   ├── UserManageModal.vue  # 用户信息管理弹窗
 │       │   ├── UploadResumeModal.vue# 上传简历弹窗
 │       │   ├── ManageResumeModal.vue# 管理简历弹窗
-│       │   └── KbModal.vue          # 知识库管理弹窗
+│       │   ├── KbModal.vue          # 知识库管理弹窗
+│       │   └── ModelConfigModal.vue # AI 模型配置弹窗
 │       ├── composables/
 │       │   └── useSpeechRecognition.js  # Web Speech API 封装
 │       ├── stores/
@@ -95,12 +96,15 @@ resume_agent/
 │       │   ├── session.js           # 会话管理状态
 │       │   ├── chat.js              # 聊天消息状态
 │       │   ├── knowledge.js         # 知识库状态
-│       │   └── resume.js            # 简历管理状态
+│       │   ├── resume.js            # 简历管理状态
+│       │   └── config.js            # 模型配置状态
 │       ├── styles/
 │       │   └── index.css            # 全局样式
 │       └── utils/
-│           └── index.js             # 工具函数
-├── .env_temple                      # 环境变量模板
+│           ├── index.js             # 工具函数
+│           └── events.js            # 全局事件总线
+├── config.json                      # AI 模型配置（通过 Web UI 生成）
+├── .env_temple                      # 环境变量模板（备用）
 ├── requestments.txt                 # Python 依赖
 └── README.md                        # 本文件
 ```
@@ -151,38 +155,25 @@ CREATE DATABASE IF NOT EXISTS dmmdb
 mysql -u <用户名> -p <数据库名> < backend/sql/users_*.sql
 mysql -u <用户名> -p <数据库名> < backend/sql/chat_sessions_*.sql
 mysql -u <用户名> -p <数据库名> < backend/sql/chat_session_contents_*.sql
-mysql -u <用户名> -p <数据库名> < backend/sql/user_resumes_*.sql
+mysql -u <用户名> -p <数据库名> < backend/sql/user_resumes_sql.sql
 ```
 
 > 数据库连接信息在 `backend/sqlClass/mysql_connector.py` 中配置，请根据实际环境修改。
 
-### 5. 配置环境变量
+### 5. 准备向量库（可选）
 
-复制 `.env_temple` 为 `.env` 并填写实际值：
-
-```bash
-cp .env_temple .env
-```
-
-编辑 `.env` 文件：
-
-```ini
-DEEPSEEK_API_KEY=your_api_key_here
-DEEPSEEK_MODEL=deepseek-chat
-DEEPSEEK_BASE_URL=https://api.deepseek.com/v1
-EMBEDDING_MODE=BAAI/bge-large-zh-v1.5
-```
-
-### 6. 准备向量库
-
-首次使用需初始化知识库（将 `user_manual.md` 向量化）：
+首次使用可初始化知识库（将 `user_manual.md` 向量化）：
 
 ```bash
 cd backend
 python manual/manual_to_vector.py
 ```
 
-或使用 Web 界面的"知识库"功能手动添加 QA 条目。
+也可稍后通过 Web 界面的"知识库"功能手动添加 QA 条目。
+
+### 6. 启动服务
+
+参见下方 [启动方式](#启动方式) 章节。首次启动后，通过 Web 界面完成 **AI 模型配置** 即可开始使用（无需手动编辑配置文件）。
 
 ---
 
@@ -199,7 +190,7 @@ npm run build
 
 # 2. 启动后端（自动服务前端构建产物）
 cd ../backend
-uvicorn web_app:app --host 127.0.0.1 --port 8000
+python ./web_app.py
 ```
 
 浏览器访问：[http://127.0.0.1:8000](http://127.0.0.1:8000)
@@ -235,11 +226,12 @@ python agent/run_agent.py
 
 ## 使用流程
 
-1. **注册账号** → 填写用户名、邮箱、密码
-2. **上传简历** → 支持 PDF/DOCX 格式，最多 3 份
-3. **开始对话** → 点击 `/start` 快捷按钮启动面试
-4. **查看历史** → 左侧边栏展示所有会话，支持重命名和删除
-5. **知识库** → 点击顶部"知识库"入口管理 QA 条目
+1. **配置 AI 模型**：首次使用需点击顶部"模型配置"，填写模型名称、API Key、Base URL（支持 DeepSeek / OpenAI / 其他兼容接口），保存后立即生效
+2. **注册账号** → 填写用户名、邮箱、密码
+3. **上传简历** → 支持 PDF/DOCX 格式，最多 3 份，自动解析文本
+4. **开始对话** → 点击 `/start` 快捷按钮启动面试
+5. **查看历史** → 左侧边栏展示所有会话，支持重命名和删除
+6. **知识库** → 点击顶部"知识库"入口管理 QA 条目
 
 ### 可用命令
 
@@ -249,9 +241,29 @@ python agent/run_agent.py
 | `/end` | yes | yes | 结束面试 |
 | `/resume` | yes | yes | 查看当前简历内容 |
 | `/vector 关键词` | yes | yes | 查询向量库中相关 JD 数量 |
-| `/history` | yes | yes | 查看当前对话历史 |
 | `/help` | yes | yes | 查看命令帮助 |
 | `/quit` | — | yes | 退出终端 |
+
+---
+
+## AI 模型配置
+
+系统通过项目根目录的 `config.json` 管理模型配置，支持通过 Web 界面在线配置，保存后自动重载模型实例，无需重启服务。
+
+### 配置项说明
+
+| 字段 | 说明 | 示例 |
+|------|------|------|
+| `model_name` | 聊天模型名称 | `deepseek-chat` |
+| `api_key` | API 密钥 | `sk-xxx` |
+| `base_url` | API 地址 | `https://api.deepseek.com/v1` |
+| `temperature` | 生成温度（0~2） | `0.7` |
+| `embedding_model` | 向量模型名称 | `BAAI/bge-large-zh-v1.5` |
+| `embedding_separate` | 是否独立配置向量模型 | `true` / `false` |
+| `embedding_api_key` | 向量模型 API Key（独立时） | `sk-xxx` |
+| `embedding_base_url` | 向量模型 API 地址（独立时） | `https://...` |
+
+> 当 `embedding_separate` 为 `false` 时，向量模型复用主模型的 API Key 和 Base URL。
 
 ---
 
@@ -300,6 +312,15 @@ python agent/run_agent.py
 | POST | `/api/vector/manual/add` | 添加 QA 文档 |
 | DELETE | `/api/vector/manual/{id}` | 删除 QA 文档 |
 
+### 模型配置
+
+| 方法 | 路径 | 说明 |
+|------|------|------|
+| GET | `/api/config/status` | 查询配置是否就绪 |
+| GET | `/api/config/load` | 加载已保存的配置 |
+| POST | `/api/config/save` | 保存配置并重载模型 |
+| POST | `/api/config/reset` | 重置配置 |
+
 ---
 
 ## 公网访问（ngrok）
@@ -326,14 +347,17 @@ ngrok http 8000
 **Q: 启动时报 MySQL 连接失败？**
 A: 检查 `backend/sqlClass/mysql_connector.py` 中的数据库连接配置，确保 MySQL 服务已启动，数据库 `dmmdb` 已创建。
 
+**Q: 提示"AI 模型未配置"？**
+A: 首次使用需通过 Web 界面的"模型配置"弹窗完成配置（填写模型名称、API Key、Base URL），保存后即可使用。配置信息存储在 `config.json` 中。
+
 **Q: Agent 初始化失败？**
-A: 检查 `.env` 中的 `DEEPSEEK_API_KEY` 是否正确，网络是否可访问 API。
+A: 检查模型配置是否正确，网络是否可访问 API 地址。可通过 `/api/config/status` 接口确认配置状态。
 
 **Q: 语音输入不工作？**
 A: Web Speech API 需要 HTTPS 环境或 localhost。确保使用 Chrome/Edge/Safari 最新版，首次使用需授权麦克风权限。
 
 **Q: 知识库为空？**
-A: 首次使用需执行向量化初始化（见"准备向量库"章节），之后可通过 Web UI 的"知识库"入口手动添加 QA 条目。
+A: 可通过 Web UI 的"知识库"入口手动添加 QA 条目，也可执行 `python manual/manual_to_vector.py` 初始化内置知识。
 
 **Q: 登录后对话历史丢失？**
 A: 会话数据存储在 MySQL，服务重启不影响。确保登录的是同一账号。
