@@ -1,3 +1,4 @@
+from typing import Annotated
 import json
 from dataclasses import dataclass
 from typing import Dict, Callable, Any,List
@@ -81,3 +82,12 @@ tool_registry = None
 
 if tool_registry is None:
     tool_registry = ToolRegistry()
+
+if __name__ == "__main__":
+    @tool_registry.register()
+    def test_tool(b: Annotated[int, "第一个整数参数"], c: Annotated[int, "第二个整数参数"]) -> int:
+        """测试工具"""
+        return b + c
+    
+    print(tool_registry.test("test_tool"))
+    # print(tool_registry.list_tool_definitions())

@@ -118,7 +118,7 @@ def get_job_working(user_id: Annotated[str, "当前用户的 user_id，必填，
         #             logger.info(f"[后台] 已启动爬虫任务: {ck}")
 
         # 仅返回岗位关键词与城市，由模型自行决定是否继续调用 get_jd_content
-        print(content_str)
+        # print(content_str)
         return content_str
 
     except (ValueError, TypeError):
@@ -142,7 +142,7 @@ def get_jd_content(key: Annotated[str, "岗位关键词，多个岗位用英文�
         for i, doc in enumerate(content_doc):
             content += f"JD 信息{i+1}:\n{doc.page_content}\n\n"
     output_content = SummServer(content, "SUMM_PROMPT").content
-    print(output_content)
+    # print(output_content)
     return output_content
 
 

@@ -22,6 +22,8 @@ const textareaRef = ref(null)
 
 const isAuthenticated = computed(() => authStore.isAuthenticated)
 const messages = computed(() => chatStore.messages)
+// isTyping 与当前会话 ID 绑定：仅当当前会话在推理集合中时为 true。
+// 用 Set 支持多会话同时推理互不干扰：切换会话不影响其他会话的推理状态。
 const isTyping = computed(() => chatStore.isTyping)
 const statusText = computed(() => chatStore.statusText)
 const sessionName = computed(() => {
@@ -68,6 +70,11 @@ function sendMessage() {
   chatStore.sendMessage(text)
   inputText.value = ''
   resetTextareaHeight()
+}
+
+// 停止当前会话推理
+function handleStop() {
+  chatStore.cancelChat()
 }
 
 function openConfigModal() {
@@ -215,6 +222,14 @@ function handleVoiceRecognized(text) {
         @click="sendMessage"
       >
         <i class="fas fa-paper-plane"></i> 发送
+      </button>
+      <button
+        v-if="isTyping"
+        class="input-btn stop-btn"
+        @click="handleStop"
+        title="停止推理"
+      >
+        <i class="fas fa-stop"></i> 停止
       </button>
     </div>
 
@@ -474,6 +489,22 @@ function handleVoiceRecognized(text) {
   background: var(--color-hairline);
   border-color: var(--color-hairline);
   color: var(--color-mute);
+}
+
+/* 停止推理按钮 */
+.stop-btn {
+  height: 44px;
+  padding: 0 var(--spacing-lg);
+  font-size: 14px;
+  background: #fee2e2;
+  border-color: #fecaca;
+  color: #b91c1c;
+  font-weight: 600;
+}
+
+.stop-btn:hover {
+  background: #fecaca;
+  border-color: #fca5a5;
 }
 
 /* 状态栏 */

@@ -84,6 +84,7 @@ class EmbeddingModelIni(ModelFactory):
             base_url=base_url,
             api_key=api_key,
             check_embedding_ctx_length=False,
+            dimensions=1536
         )
         return _embedding_model
 

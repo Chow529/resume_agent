@@ -87,10 +87,11 @@ class AgentMemory:
         self.add_message(session_id, AIMessage(content=content))
 
     def clear_history(self, session_id: str) -> None:
-        """清空上下文并重置轮次计数"""
+        """清空上下文并重置轮次计数（轮次同步持久化到数据库）"""
         session = self.ensure_session(session_id)
         session["chat_history"] = []
         session["question_count"] = 0
+        self._persist_state(session_id)
 
     def trim_history(self, session_id: str) -> List[BaseMessage]:
         """限制上下文长度，避免超出 token 限制"""
@@ -155,7 +156,30 @@ class AgentMemory:
         return self.ensure_session(session_id).get("status", "initialized")
 
     def set_status(self, session_id: str, status: str) -> None:
+        """更新会话面试状态并持久化到数据库
+
+        数据库是状态的唯一可信源，内存仅作缓存，保证用户退出后重新登录
+        仍能恢复到 interviewing / terminated 等真实状态。
+        """
         self.ensure_session(session_id)["status"] = status
+        self._persist_state(session_id)
+
+    def _persist_state(self, session_id: str) -> None:
+        """把当前内存中的 status / question_count 写入数据库会话记录"""
+        db_session_id = self.get_db_session_id(session_id)
+        if not db_session_id:
+            # 还没有数据库记录（如刚 init 未 bind），状态只在内存保留，建库后再由恢复逻辑兜底
+            return
+        try:
+            from sqlClass.chat_session_model import ChatSessionModel
+            session = self._sessions[session_id]
+            ChatSessionModel().update_interview_state(
+                db_session_id,
+                status=session.get("status", "initialized"),
+                question_count=session.get("question_count", 0),
+            )
+        except Exception as e:
+            logger.error(f"持久化会话面试状态失败: {e}", exc_info=True)
 
     def get_resume_text(self, session_id: str) -> Optional[str]:
         return self.ensure_session(session_id).get("resume_text")
@@ -169,6 +193,7 @@ class AgentMemory:
     def increment_question_count(self, session_id: str) -> int:
         session = self.ensure_session(session_id)
         session["question_count"] = session.get("question_count", 0) + 1
+        self._persist_state(session_id)
         return session["question_count"]
 
     # ============================================================
@@ -261,18 +286,29 @@ class AgentMemory:
 
         支持 session_id 形如 ``sess_<db_id>`` 的历史会话恢复；
         若未找到历史会话且提供了 user_id，则新建数据库会话。
+
+        恢复时会从数据库读回面试状态（status）与轮次（question_count），
+        保证用户面试中途退出后重新登录仍处于 interviewing 状态。
         """
         db_session_id = None
         history: List[BaseMessage] = []
+        restored_status = "initialized"
+        restored_question_count = 0
 
         if session_id.startswith("sess_"):
             try:
                 possible_db_id = int(session_id.split("_", 1)[1])
                 from sqlClass.chat_session_model import ChatSessionModel
-                if ChatSessionModel().get_session_by_id(possible_db_id):
+                record = ChatSessionModel().get_session_by_id(possible_db_id)
+                if record:
                     db_session_id = possible_db_id
                     history = self.load_history(db_session_id)
-                    logger.info(f"从数据库加载会话 {db_session_id}，共 {len(history)} 条历史消息")
+                    restored_status = record.get("status") or "initialized"
+                    restored_question_count = int(record.get("question_count") or 0)
+                    logger.info(
+                        f"从数据库加载会话 {db_session_id}，共 {len(history)} 条历史消息，"
+                        f"状态={restored_status}，轮次={restored_question_count}"
+                    )
             except (ValueError, TypeError):
                 pass  # 不是 sess_<数字> 格式，继续创建新会话
             except Exception as e:
@@ -283,10 +319,10 @@ class AgentMemory:
 
         session_data = {
             "chat_history": history,
-            "status": "initialized",
+            "status": restored_status,
             "created_at": int(time.time()),
             "db_session_id": db_session_id,
-            "question_count": 0,
+            "question_count": restored_question_count,
         }
         self._sessions[session_id] = session_data
         return session_data

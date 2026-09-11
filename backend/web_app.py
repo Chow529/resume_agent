@@ -29,8 +29,8 @@ if str(sql_class_dir) not in sys.path:
 
 from fastapi import FastAPI, HTTPException, Request, UploadFile, File, Form, Query
 from fastapi.staticfiles import StaticFiles
-from fastapi.responses import HTMLResponse, FileResponse, Response
-from langchain_core.messages import HumanMessage, AIMessage, SystemMessage
+from fastapi.responses import HTMLResponse, FileResponse, Response, StreamingResponse
+from langchain_core.messages import HumanMessage, AIMessage, SystemMessage,ToolMessage
 import asyncio
 
 
@@ -73,6 +73,18 @@ _agent = None
 _chroma_server = None
 
 
+@app.on_event("startup")
+async def _ensure_db_schema():
+    """启动时幂等迁移：为 chat_sessions 补上面试状态字段（status / question_count）。
+    数据库不可用时不阻断服务启动。"""
+    try:
+        from sqlClass.chat_session_model import ChatSessionModel
+        await asyncio.to_thread(ChatSessionModel().ensure_interview_columns)
+        logger.info("面试状态字段迁移检查完成")
+    except Exception as e:
+        logger.warning(f"面试状态字段迁移跳过（数据库暂不可用？）: {e}")
+
+
 # ─────────────────────────────────────────────────────
 # 中间件：只记录核心 API 调用信息（方法、路径、状态码）
 # ─────────────────────────────────────────────────────
@@ -99,6 +111,28 @@ async def log_requests(request: Request, call_next):
 # ─────────────────────────────────────────────────────
 # 会话管理辅助函数
 # ─────────────────────────────────────────────────────
+
+# 每个会话的取消事件（按 session_id 隔离），用于用户主动结束推理
+_session_cancel_events: dict[str, "threading.Event"] = {}
+# 每个会话当前正在执行的 agent 后台线程（便于取消后等待退出）
+_session_agent_threads: dict[str, "threading.Thread"] = {}
+
+
+def _get_cancel_event(session_id: str) -> "threading.Event":
+    """获取（或创建）该会话的取消事件。新会话默认未取消。"""
+    import threading as _t
+    ev = _session_cancel_events.get(session_id)
+    if ev is None:
+        ev = _t.Event()
+        _session_cancel_events[session_id] = ev
+    return ev
+
+
+def _sse(event: str, data: dict) -> str:
+    """构造一条 SSE 消息"""
+    return f"event: {event}\ndata: {json.dumps(data, ensure_ascii=False)}\n\n"
+
+
 def get_agent():
     global _agent
     if _agent is None:
@@ -146,7 +180,7 @@ def build_agent():
 
     def should_continue(state):
         if isinstance(state["messages"][-1], AIMessage) and state["messages"][-1].tool_calls:
-            print(state["messages"][-1].tool_calls)
+            # print(state["messages"][-1])
             return "tools"
         return END
 
@@ -795,7 +829,14 @@ async def init_session_endpoint(session_id: str, user_id: int = Query(None)):
     """初始化会话端点 - 从数据库恢复历史会话，或创建新的数据库会话记录"""
     if not memory.has_session(session_id):
         memory.restore_session(session_id, user_id)
-    return {"session_id": session_id, "status": "initialized", "db_session_id": memory.get_db_session_id(session_id)}
+    # 返回数据库恢复出的真实面试状态（initialized/interviewing/terminated），
+    # 而非硬编码 initialized，保证面试中途退出后重新登录能回到面试模式
+    return {
+        "session_id": session_id,
+        "status": memory.get_status(session_id),
+        "question_count": memory.get_question_count(session_id),
+        "db_session_id": memory.get_db_session_id(session_id),
+    }
 
 
 @app.put("/api/sessions/{session_id}/user")
@@ -822,8 +863,15 @@ async def bind_session_user(session_id: str, request: Request):
 
 @app.post("/api/sessions/{session_id}/chat")
 async def chat(session_id: str, request: Request):
-    """对话接口 - 用户发送消息，Agent回复"""
-    # 如果会话不存在，自动从数据库加载历史会话
+    """对话接口 - 流式版（SSE）
+
+    事件类型：
+    - chunk:          增量内容 {content}
+    - done:           推理完成 {content, type, role, db_session_id}
+    - cancelled:      用户主动取消 {content, type, db_session_id}
+    - error:          出错 {message, db_session_id}
+    - config_required: AI 模型未配置 {message, db_session_id}
+    """
     if not memory.has_session(session_id):
         memory.restore_session(session_id)
         logger.debug(f"创建/加载会话: {session_id}, db_session_id: {memory.get_db_session_id(session_id)}")
@@ -834,22 +882,19 @@ async def chat(session_id: str, request: Request):
     if not user_message:
         raise HTTPException(status_code=400, detail="消息内容不能为空")
 
-    # 检查 AI 模型是否已配置
     if not config_ready():
-        return {
-            "session_id": session_id,
-            "message": "[AI 模型未配置] 请先完成 AI 模型配置后再使用该功能",
-            "role": "error",
-            "type": "config_required",
-            "db_session_id": None
-        }
+        async def cfg_required_stream():
+            yield _sse("config_required", {
+                "session_id": session_id,
+                "message": "[AI 模型未配置] 请先完成 AI 模型配置后再使用该功能",
+                "db_session_id": None,
+            })
+        return StreamingResponse(cfg_required_stream(), media_type="text/event-stream")
 
-    # 将 user_id 绑定到会话（前端每次发消息时带上）
     uid = data.get("user_id")
     if uid:
         memory.set_user_id(session_id, int(uid))
 
-    # 自动创建 db_session_id（如果不存在且有 user_id），防止消息丢失
     if not memory.get_db_session_id(session_id) and memory.get_user_id(session_id):
         db_session_id = memory.ensure_db_session(session_id, memory.get_user_id(session_id))
         logger.info(f"自动创建数据库会话: {db_session_id}")
@@ -857,226 +902,245 @@ async def chat(session_id: str, request: Request):
     # 保存用户消息到数据库（无论是否特殊命令）
     save_message_to_db(session_id, "user", user_message)
 
-    # ── 意图识别：只有意图明确才进入对应的流程逻辑 ──
+    # ── 意图识别 ──
     intent = _match_intent(user_message)
-    
-    
+    print(intent)
+        
+    # 准备：direct_reply 直接回复（无需 agent），agent_messages 走流式推理
+    direct_reply = None
+    agent_messages = None
+    response_type = intent if intent else "other"
+    post_status = None              # 推理完成后要设置的 session 状态
+    clear_history_after = False    # 推理完成后是否清空历史
+
     if intent == "start_interview":
-        try:
-            user_id = memory.get_user_id(session_id)
-
-            # 检查是否有 user_id
-            if not user_id:
-                return {
-                    "session_id": session_id,
-                    "message": "[请先登录] 请先登录或注册用户，然后上传简历",
-                    "role": "error",
-                    "type": "error",
-                    "db_session_id": memory.get_db_session_id(session_id)
-                }
-
-            # 清理旧对话历史
+        user_id = memory.get_user_id(session_id)
+        if not user_id:
+            direct_reply = "[请先登录] 请先登录或注册用户，然后上传简历"
+            response_type = "error"
+        else:
             memory.clear_history(session_id)
-
-            # 让 Agent 主导面试流程 - Agent 会自动调用 get_job_working() 获取简历
-            memory.add_user_message(session_id, f"开始面试，请先获取我的简历信息,我的user_id是{user_id}")
-
-            agent = get_agent()
-            response = await asyncio.to_thread(agent.invoke, {"messages": memory.get_history(session_id)})
-            messages = response.get("messages", [])
-            last_ai = memory.last_ai_message(messages)
-            ai_reply = last_ai.content if last_ai and isinstance(last_ai.content, str) else ""
-
-            memory.add_ai_message(session_id, ai_reply)
+            # 立即把状态落库为 interviewing，不必等首轮回复完成，
+            # 防止首轮推理过程中用户退出导致状态仍停留在旧值
             memory.set_status(session_id, "interviewing")
-
-            # 保存 agent 回复到数据库
-            save_message_to_db(session_id, "assistant", ai_reply)
-
-            return {
-                "session_id": session_id,
-                "message": ai_reply,
-                "role": "agent",
-                "type": "interview_start",
-                "db_session_id": memory.get_db_session_id(session_id)
-            }
-        except Exception as e:
-            logger.error(f"Agent执行错误: {e}")
-            return {
-                "session_id": session_id,
-                "message": f"[错误] Agent执行失败: {str(e)}",
-                "role": "error",
-                "db_session_id": memory.get_db_session_id(session_id)
-            }
+            memory.add_user_message(session_id, f"开始面试，请先获取我的简历信息,我的user_id是{user_id}")
+            agent_messages = memory.get_history(session_id)
+            post_status = "interviewing"
+            response_type = "interview_start"
 
     elif intent == "end_interview":
         memory.clear_history(session_id)
         memory.set_status(session_id, "terminated")
-        end_msg = "面试已结束，可以输入 /start 重新开始"
-        save_message_to_db(session_id, "assistant", end_msg)
-        return {
-            "session_id": session_id,
-            "message": end_msg,
-            "role": "agent",
-            "type": "interview_end",
-            "db_session_id": memory.get_db_session_id(session_id)
-        }
+        direct_reply = "面试已结束，可以输入 /start 重新开始"
+        response_type = "interview_end"
 
     elif intent == "view_resume":
         user_id = memory.get_user_id(session_id)
-
-        # 检查是否有 user_id
         if not user_id:
-            reply_msg = "[请先登录] 请先登录并上传简历"
-            save_message_to_db(session_id, "assistant", reply_msg)
-            return {
-                "session_id": session_id,
-                "message": reply_msg,
-                "role": "agent",
-                "type": "resume",
-                "db_session_id": memory.get_db_session_id(session_id)
-            }
-
-        # 从数据库获取该用户激活的简历
-        from sqlClass.resume_model import ResumeModel
-        resume_model = ResumeModel()
-        active_resume = resume_model.get_active(user_id)
-
-        if active_resume and active_resume.get("resume_text"):
-            resume_text = active_resume["resume_text"]
-            reply_msg = f"\n[简历内容]\n{resume_text}"
+            direct_reply = "[请先登录] 请先登录并上传简历"
+            response_type = "resume"
         else:
-            reply_msg = "[提示] 未找到激活的简历，请先上传并激活简历"
-        save_message_to_db(session_id, "assistant", reply_msg)
-        return {
-            "session_id": session_id,
-            "message": reply_msg,
-            "role": "agent",
-            "type": "resume" if active_resume and active_resume.get("resume_text") else "resume_not_found",
-            "db_session_id": memory.get_db_session_id(session_id)
-        }
+            from sqlClass.resume_model import ResumeModel
+            resume_model = ResumeModel()
+            active_resume = resume_model.get_active(user_id)
+            if active_resume and active_resume.get("resume_text"):
+                direct_reply = f"\n[简历内容]\n{active_resume['resume_text']}"
+                response_type = "resume"
+            else:
+                direct_reply = "[提示] 未找到激活的简历，请先上传并激活简历"
+                response_type = "resume_not_found"
 
     elif intent == "query_vector":
         try:
             retriever = get_chroma_server().get_retriever()
-            # 提取关键词：优先用 /vector 后的参数，否则用整条消息
             jd_parts = [x.strip() for x in user_message.split(" ") if x.strip()]
             if len(jd_parts) > 1:
                 all_docs = retriever.invoke(jd_parts[-1])
-                reply_msg = f"\n[向量库] 当前存储了 {len(all_docs)} 条相关JD记录"
+                direct_reply = f"\n[向量库] 当前存储了 {len(all_docs)} 条相关JD记录"
             else:
-                reply_msg = "请提供查询关键词，例如: /vector python"
-            save_message_to_db(session_id, "assistant", reply_msg)
-            return {
-                "session_id": session_id,
-                "message": reply_msg,
-                "role": "agent",
-                "type": "vector",
-                "db_session_id": memory.get_db_session_id(session_id)
-            }
+                direct_reply = "请提供查询关键词，例如: /vector python"
+            response_type = "vector"
         except Exception as e:
-            reply_msg = f"[向量库] 查询失败: {str(e)}"
-            save_message_to_db(session_id, "assistant", reply_msg)
-            return {
-                "session_id": session_id,
-                "message": reply_msg,
-                "role": "error",
-                "db_session_id": memory.get_db_session_id(session_id)
-            }
+            direct_reply = f"[向量库] 查询失败: {str(e)}"
+            response_type = "error"
+
     elif intent == "help":
-        try:
-            # 交给 Agent 处理：模型会自主调用 get_web_tutorial 工具检索使用说明，再据此回答
-            agent = get_agent()
-            agent_messages = memory.build_prompt_messages(
-                session_id,
-                extra_messages=[HumanMessage(content=user_message)],
-                system_prefix=_help_prompt,
-            )
-            response = await asyncio.to_thread(agent.invoke, {"messages": agent_messages})
-            messages = response.get("messages", [])
-            last_ai = memory.last_ai_message(messages)
-            reply_msg = last_ai.content if last_ai else ""
+        agent_messages = memory.build_prompt_messages(
+            session_id,
+            extra_messages=[HumanMessage(content=user_message)],
+            system_prefix=_help_prompt,
+        )
+        response_type = "help"
 
-            save_message_to_db(session_id, "assistant", reply_msg)
-            return {
-                "session_id": session_id,
-                "message": reply_msg,
-                "role": "agent",
-                "type": "help",
-                "db_session_id": memory.get_db_session_id(session_id)
-            }
-        except Exception as e:
-            logger.error(f"帮助意图处理失败: {e}", exc_info=True)
-            reply_msg = f"[帮助] 处理失败: {str(e)}"
-            save_message_to_db(session_id, "assistant", reply_msg)
-            return {
-                "session_id": session_id,
-                "message": reply_msg,
-                "role": "error",
-                "db_session_id": memory.get_db_session_id(session_id)
-            }
-
-    # 普通对话 - 交给Agent处理（意图为 other 时附加边界约束，保证不偏离项目范围）
-    # 限制历史长度，避免超出 token 限制（保留最近 20 条消息）
-    memory.trim_history(session_id)
-    memory.add_user_message(session_id, user_message)
-
-    # 面试轮次计数
-    current_round = memory.increment_question_count(session_id)
-
-    boundary = _boundary_prompt if intent == "other" else None
-    
-    try:
-        agent = get_agent()
-        # 第 11 轮：达到上限，自动结束面试
+    else:
+        # 普通对话
+        memory.trim_history(session_id)
+        memory.add_user_message(session_id, user_message)
+        current_round = memory.increment_question_count(session_id)
+        boundary = _boundary_prompt if intent == "other" else None
+        print(current_round)
         if current_round >= 11:
-            #  TODO用其他专业的打分模型进行判断
             extra = [HumanMessage(content="以上是我全部的回答,请根据我的回答以及我的表现,给出综合汇总评价以及评分。")]
             agent_messages = memory.build_prompt_messages(session_id, extra_messages=extra, system_prefix=boundary)
-            response = await asyncio.to_thread(agent.invoke, {"messages": agent_messages})
-            messages = response.get("messages", [])
-            last_ai = memory.last_ai_message(messages)
-            ai_reply = last_ai.content if last_ai else ""
-            # 保存 Agent 回复到数据库
-            save_message_to_db(session_id, "assistant", ai_reply)
+            post_status = "terminated"
+            clear_history_after = True
+            response_type = "interview_end"
+        else:
+            agent_messages = memory.build_prompt_messages(session_id, system_prefix=boundary)
 
-            memory.clear_history(session_id)
-            memory.set_status(session_id, "terminated")
+    # 重置当前会话的取消事件（按 session_id 隔离，多会话互不干扰）
+    cancel_event = _get_cancel_event(session_id)
+    cancel_event.clear()
 
-            return {
-                "session_id": session_id,
-                "message": ai_reply,
+    db_session_id = memory.get_db_session_id(session_id)
+
+    async def event_stream():
+        # 分支 1：直接回复（无需 agent）
+        if direct_reply is not None:
+            yield _sse("chunk", {"content": direct_reply})
+            save_message_to_db(session_id, "assistant", direct_reply)
+            if post_status:
+                memory.set_status(session_id, post_status)
+            yield _sse("done", {
+                "content": direct_reply,
+                "type": response_type,
                 "role": "agent",
-                "type": "interview_end",
-                "db_session_id": memory.get_db_session_id(session_id)
-            }
-        agent_messages = memory.build_prompt_messages(session_id, system_prefix=boundary)
-        response = await asyncio.to_thread(agent.invoke, {"messages": agent_messages})
-        messages = response.get("messages", [])
-        last_ai = memory.last_ai_message(messages)
-        ai_reply = last_ai.content if last_ai else ""
-        memory.add_ai_message(session_id, ai_reply)
+                "db_session_id": db_session_id,
+            })
+            return
 
-        # 保存 Agent 回复到数据库
-        save_message_to_db(session_id, "assistant", ai_reply)
+        # 分支 2：agent 流式推理
+        if agent_messages is None:
+            yield _sse("error", {"message": "无可执行的推理流程", "db_session_id": db_session_id})
+            return
 
-        return {
-            "session_id": session_id,
-            "message": ai_reply,
-            "role": "agent",
-            "db_session_id": memory.get_db_session_id(session_id)
-        }
-    except Exception as e:
-        logger.error(f"Agent执行错误: {e}", exc_info=True)
-        error_msg = f"[错误] Agent执行失败: {str(e)}"
-        # 保存错误消息到数据库
-        save_message_to_db(session_id, "assistant", error_msg)
-        return {
-            "session_id": session_id,
-            "message": error_msg,
-            "role": "error",
-            "db_session_id": memory.get_db_session_id(session_id)
-        }
+        loop = asyncio.get_event_loop()
+        queue: asyncio.Queue = asyncio.Queue()
+        import threading as _t
+
+        def run_agent():
+            """后台线程：迭代 agent.stream，把 chunks 通过 queue 传回异步侧"""
+            try:
+                agent = get_agent()
+                for chunk in agent.stream({"messages": agent_messages}, stream_mode="messages"):
+                    if cancel_event.is_set():
+                        loop.call_soon_threadsafe(queue.put_nowait, {"type": "cancelled"})
+                        return
+                    # stream_mode="messages" 时 chunk 是 (message, metadata) 元组
+                    if not isinstance(chunk, tuple) or len(chunk) < 2:
+                        continue
+                    msg, metadata = chunk[0], chunk[1]
+                    # 只输出 agent 节点（模型调用）产生的 AIMessage 文本内容。
+                    # langgraph 在 stream_mode="messages" 下会对同一消息 yield 多次
+                    # （作为某节点的输出，又作为下一节点的输入），所以必须用
+                    # metadata["langgraph_node"] 限定只取 "agent" 节点产生的消息，
+                    # 否则 ToolMessage 等工具返回结果会被重复输出到界面。
+                    if metadata.get("langgraph_node") != "agent":
+                        continue
+                    # 跳过工具调用消息（含 tool_calls 时 content 通常为空字符串）
+                    if getattr(msg, "tool_calls", None):
+                        continue
+                    if isinstance(msg, ToolMessage):
+                        continue
+                    content = getattr(msg, "content", "")
+                    if not content or not isinstance(content, str):
+                        continue
+                    loop.call_soon_threadsafe(queue.put_nowait, {"type": "chunk", "content": content})
+                loop.call_soon_threadsafe(queue.put_nowait, {"type": "done"})
+            except Exception as e:
+                logger.error(f"Agent 流式执行错误: {e}", exc_info=True)
+                loop.call_soon_threadsafe(queue.put_nowait, {"type": "error", "message": str(e)})
+
+        thread = _t.Thread(target=run_agent, daemon=True)
+        _session_agent_threads[session_id] = thread
+        thread.start()
+
+        full_reply = ""
+        # 标记是否已经把 full_reply 保存到长/短记忆（避免重复保存）
+        saved = False
+
+        async def _save_reply(status_tag: str = None):
+            """把已生成的 full_reply 写入长记忆（数据库）+ 短记忆（上下文）"""
+            nonlocal saved
+            if saved or not full_reply:
+                return
+            saved = True
+            content = full_reply + (f"\n[{status_tag}]" if status_tag else "")
+            try:
+                memory.add_ai_message(session_id, content)
+                save_message_to_db(session_id, "assistant", content)
+            except Exception as e:
+                logger.error(f"保存流式回复失败: {e}", exc_info=True)
+
+        try:
+            while True:
+                try:
+                    item = await asyncio.wait_for(queue.get(), timeout=0.5)
+                except asyncio.TimeoutError:
+                    if not thread.is_alive():
+                        break
+                    continue
+
+                t = item.get("type")
+                if t == "chunk":
+                    full_reply += item["content"]
+                    yield _sse("chunk", {"content": item["content"]})
+                elif t == "done":
+                    # 推理正常完成：保存完整回复
+                    await _save_reply()
+                    if post_status:
+                        memory.set_status(session_id, post_status)
+                    if clear_history_after:
+                        memory.clear_history(session_id)
+                    yield _sse("done", {
+                        "content": full_reply,
+                        "type": response_type,
+                        "role": "agent",
+                        "db_session_id": db_session_id,
+                    })
+                    return
+                elif t == "cancelled":
+                    # 用户主动取消：保存已生成的部分（带停止标记）
+                    await _save_reply(status_tag="已停止")
+                    yield _sse("cancelled", {
+                        "content": full_reply,
+                        "type": response_type,
+                        "db_session_id": db_session_id,
+                    })
+                    return
+                elif t == "error":
+                    err_msg = f"[错误] Agent执行失败: {item['message']}"
+                    save_message_to_db(session_id, "assistant", err_msg)
+                    yield _sse("error", {"message": err_msg, "db_session_id": db_session_id})
+                    return
+        finally:
+            # 客户端断开或异常退出：通知线程停止并等待退出
+            cancel_event.set()
+            thread.join(timeout=2.0)
+            cancel_event.clear()
+            _session_agent_threads.pop(session_id, None)
+            # 兜底：若异常路径下尚未保存（如客户端在流式过程中断开），也要落库
+            # 保证已生成的 partial 内容不会丢失到长期记忆
+            if not saved and full_reply:
+                try:
+                    memory.add_ai_message(session_id, full_reply)
+                    save_message_to_db(session_id, "assistant", full_reply)
+                except Exception as e:
+                    logger.error(f"客户端断开后保存流式回复失败: {e}", exc_info=True)
+
+    return StreamingResponse(
+        event_stream(),
+        media_type="text/event-stream",
+        headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no"},
+    )
+
+
+@app.post("/api/sessions/{session_id}/cancel")
+async def cancel_chat(session_id: str):
+    """取消指定会话正在进行的推理（按 session_id 隔离，互不干扰）"""
+    ev = _get_cancel_event(session_id)
+    ev.set()
+    return {"success": True, "session_id": session_id}
 
 
 # ─────────────────────────────────────────────────────
@@ -1175,8 +1239,14 @@ async def delete_manual_document(doc_id: str):
 
 @app.get("/api/sessions/{session_id}/status")
 async def get_session_status(session_id: str):
-    """获取会话状态"""
-    return {"session_id": session_id, "status": memory.get_status(session_id)}
+    """获取会话状态（内存未命中时先从数据库恢复，避免后端重启后状态丢失）"""
+    if not memory.has_session(session_id):
+        memory.restore_session(session_id)
+    return {
+        "session_id": session_id,
+        "status": memory.get_status(session_id),
+        "question_count": memory.get_question_count(session_id),
+    }
 
 
 @app.get("/api/sessions/list")

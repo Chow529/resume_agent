@@ -89,6 +89,82 @@ export function sendMessage(sessionId, message, userId) {
   }).then(handleResponse)
 }
 
+/**
+ * 流式对话：返回 { response, reader, abortController }，由调用方迭代 SSE 事件。
+ * @param onChunk    收到 chunk 事件时回调 (content) => void
+ * @param onDone     收到 done 事件时回调 (data) => void
+ * @param onCancelled 收到 cancelled 事件时回调 (data) => void
+ * @param onError    收到 error 事件时回调 (data) => void
+ * @param onConfigRequired 收到 config_required 事件时回调 (data) => void
+ * @returns { abortController, promise } 调用 abortController.abort() 可本地中止
+ */
+export function streamChat(sessionId, message, userId, { onChunk, onDone, onCancelled, onError, onConfigRequired } = {}) {
+  const abortController = new AbortController()
+
+  const promise = (async () => {
+    const res = await fetch(`/api/sessions/${encodeURIComponent(sessionId)}/chat`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'Accept': 'text/event-stream' },
+      body: JSON.stringify({ message, user_id: userId }),
+      signal: abortController.signal
+    })
+
+    if (!res.ok) {
+      let msg = `HTTP ${res.status}`
+      try { const d = await res.json(); msg = d.detail || d.message || msg } catch {}
+      throw new Error(msg)
+    }
+
+    const reader = res.body.getReader()
+    const decoder = new TextDecoder('utf-8')
+    let buf = ''
+
+    // 简易 SSE 解析：按双换行分割事件块
+    while (true) {
+      const { value, done } = await reader.read()
+      if (done) break
+      buf += decoder.decode(value, { stream: true })
+
+      let idx
+      // 一个 SSE 事件以 \n\n 结束
+      while ((idx = buf.indexOf('\n\n')) !== -1) {
+        const raw = buf.slice(0, idx)
+        buf = buf.slice(idx + 2)
+
+        let event = 'message'
+        let data = ''
+        for (const line of raw.split('\n')) {
+          if (line.startsWith('event:')) event = line.slice(6).trim()
+          else if (line.startsWith('data:')) data += line.slice(5).trim()
+        }
+        if (!data) continue
+
+        let payload = {}
+        try { payload = JSON.parse(data) } catch { payload = { content: data } }
+
+        if (event === 'chunk' && onChunk) onChunk(payload.content || '')
+        else if (event === 'done' && onDone) onDone(payload)
+        else if (event === 'cancelled' && onCancelled) onCancelled(payload)
+        else if (event === 'error' && onError) onError(payload)
+        else if (event === 'config_required' && onConfigRequired) onConfigRequired(payload)
+      }
+    }
+  })().catch(err => {
+    // 本地 abort 不当作错误处理
+    if (err.name === 'AbortError') return
+    if (onError) onError({ message: err.message })
+    else throw err
+  })
+
+  return { abortController, promise }
+}
+
+export function cancelChat(sessionId) {
+  return fetch(`/api/sessions/${encodeURIComponent(sessionId)}/cancel`, {
+    method: 'POST'
+  }).then(handleResponse).catch(() => {})
+}
+
 export function getLatestSession(userId) {
   return fetch(`/api/sessions/latest?user_id=${encodeURIComponent(userId)}`).then(handleResponse)
 }

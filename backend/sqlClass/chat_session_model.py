@@ -59,6 +59,48 @@ class ChatSessionModel(BaseModel):
             return 0
         return self.update(session_id, data)
 
+    def ensure_interview_columns(self) -> None:
+        """幂等迁移：确保 chat_sessions 表含有面试状态字段
+
+        - status: initialized / interviewing / terminated
+        - question_count: 当前面试轮次
+        已存在的列不会重复添加，可在每次服务启动时安全调用。
+        """
+        rows = self.db.execute_query(
+            """SELECT COLUMN_NAME FROM information_schema.COLUMNS
+               WHERE TABLE_SCHEMA = %s AND TABLE_NAME = 'chat_sessions'""",
+            (self.db.database,),
+        )
+        existing = {r.get('COLUMN_NAME') for r in rows}
+        if 'status' not in existing:
+            self.db.execute_update(
+                "ALTER TABLE `chat_sessions` "
+                "ADD COLUMN status VARCHAR(32) NOT NULL DEFAULT 'initialized'",
+                ()
+            )
+        if 'question_count' not in existing:
+            self.db.execute_update(
+                "ALTER TABLE `chat_sessions` "
+                "ADD COLUMN question_count INT NOT NULL DEFAULT 0",
+                ()
+            )
+
+    def update_interview_state(
+        self,
+        session_id: int,
+        status: str = None,
+        question_count: int = None,
+    ) -> int:
+        """更新会话的面试状态与轮次（仅更新非 None 的字段）"""
+        data = {}
+        if status is not None:
+            data['status'] = status
+        if question_count is not None:
+            data['question_count'] = int(question_count)
+        if not data:
+            return 0
+        return self.update(session_id, data)
+
 
 class ChatSessionContentModel(BaseModel):
     """会话内容模型类，存储会话中的每条消息记录"""

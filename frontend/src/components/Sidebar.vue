@@ -10,7 +10,7 @@
     <!-- 会话状态卡 -->
     <div class="session-card">
       <span class="status-dot" :class="statusDotClass"></span>
-      <span class="status-text">{{ sessionStore.sessionStatus }}</span>
+      <span class="status-text">{{ statusText }}</span>
       <div v-if="sessionStore.currentDbSessionId" class="session-id">
         会话ID: {{ sessionStore.currentDbSessionId }}
       </div>
@@ -127,6 +127,17 @@ const statusDotClass = computed(() => {
   if (status === '已终止' || status === 'terminated') return 'terminated'
   if (status === '面试中' || status === 'interviewing') return 'interviewing'
   return ''
+})
+
+// 会话状态中文文案
+const statusText = computed(() => {
+  const map = {
+    idle: '未开始面试',
+    initialized: '未开始面试',
+    interviewing: '面试中',
+    terminated: '已终止'
+  }
+  return map[sessionStore.sessionStatus] || sessionStore.sessionStatus
 })
 
 function sendCommand(cmd) {

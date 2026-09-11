@@ -78,11 +78,14 @@ export const useSessionStore = defineStore('session', () => {
     // 加载消息到 chat store（延迟导入避免循环依赖）
     const { useChatStore } = await import('./chat.js')
     const chatStore = useChatStore()
+    // 先切换到该会话的 messages 缓存（如果之前已缓存则恢复，否则新建空）
+    chatStore.switchToSession(sessionId.value)
     if (data.messages && data.messages.length > 0) {
-      chatStore.messages = data.messages.map(m => ({
+      // 用数据库加载的消息覆盖缓存
+      chatStore.setSessionMessages(sessionId.value, data.messages.map(m => ({
         role: (m.role === 'agent' ? 'assistant' : (m.role || m.sender || 'user')),
         content: m.content || m.message
-      }))
+      })))
     } else {
       chatStore.addWelcomeMessage()
     }
@@ -98,18 +101,19 @@ export const useSessionStore = defineStore('session', () => {
   async function createNewSession() {
     const authStore = useAuthStore()
 
-    // 先清空聊天
-    const { useChatStore } = await import('./chat.js')
-    const chatStore = useChatStore()
-    chatStore.clearMessages()
-    chatStore.addWelcomeMessage()
-
     // 清除旧的 sessionId，让 getSessionId 生成全新的 ID
     localStorage.removeItem('agentSessionId')
     // 生成前端 sessionId
     sessionId.value = authStore.getSessionId()
     currentDbSessionId.value = ''
     sessionStatus.value = 'idle'
+
+    // 切换到新会话的 messages 缓存（独立空数组）
+    const { useChatStore } = await import('./chat.js')
+    const chatStore = useChatStore()
+    chatStore.switchToSession(sessionId.value)
+    chatStore.clearMessages()
+    chatStore.addWelcomeMessage()
 
     // init session（传 user_id 让后端直接创建 DB 记录）
     try {
@@ -150,10 +154,13 @@ export const useSessionStore = defineStore('session', () => {
 
         const { useChatStore } = await import('./chat.js')
         const chatStore = useChatStore()
-        chatStore.messages = res.messages.map(m => ({
+        // 先切换到该会话的 messages 缓存（保留之前正在进行的流式输出，如果存在）
+        chatStore.switchToSession(sessionId.value)
+        // 用数据库加载的消息覆盖缓存
+        chatStore.setSessionMessages(sessionId.value, res.messages.map(m => ({
           role: (m.role === 'agent' ? 'assistant' : (m.role || m.sender || 'user')),
           content: m.content || m.message
-        }))
+        })))
 
         await checkSession()
       }
@@ -223,7 +230,8 @@ export const useSessionStore = defineStore('session', () => {
     try {
       const res = await api.getSessionStatus(sessionId.value)
       if (res.status) {
-        sessionStatus.value = res.status
+        // 后端 initialized（普通对话/未开始面试）对应前端 idle
+        sessionStatus.value = res.status === 'initialized' ? 'idle' : res.status
       }
     } catch {
       // 静默失败
