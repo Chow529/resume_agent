@@ -137,9 +137,17 @@
             </button>
             <div class="config-actions-right">
               <span class="test-hint">测试连接不会消耗 token</span>
-              <button class="cfg-btn" @click="handleTest" :disabled="testing || saving">
+              <button
+                class="cfg-btn"
+                :class="{ 'test-success': testedSuccess }"
+                @click="handleTest"
+                :disabled="testing || saving || testedSuccess"
+              >
                 <template v-if="testing">
                   <i class="fas fa-spinner fa-spin"></i> 测试中...
+                </template>
+                <template v-else-if="testedSuccess">
+                  <i class="fas fa-check"></i> 连接成功
                 </template>
                 <template v-else>
                   <i class="fas fa-plug"></i> 测试连接
@@ -182,6 +190,8 @@ const showApiKey = ref(false)
 const showEmbApiKey = ref(false)
 const saving = ref(false)
 const testing = ref(false)
+// 本次打开窗口内是否已测试成功，成功后按钮置灰并显示"连接成功"
+const testedSuccess = ref(false)
 
 const form = reactive({
   provider: 'openai',
@@ -286,6 +296,7 @@ async function handleTest() {
       if (res.model_found === false) {
         showToast(`接口连通，但模型列表中没有「${form.model_name}」，请确认模型名称`, 'error')
       } else {
+        testedSuccess.value = true
         showToast('连接成功（未消耗 token）')
       }
     } else {
@@ -385,6 +396,8 @@ function close() {
 
 watch(() => props.modelValue, async (val) => {
   if (val) {
+    // 每次打开窗口重置连接成功状态
+    testedSuccess.value = false
     await loadConfig()
   }
 })
@@ -655,6 +668,19 @@ watch(() => props.modelValue, async (val) => {
 
 .cfg-btn.primary:hover {
   background: var(--color-primary-soft);
+}
+
+/* 测试连接成功后的置灰样式 */
+.cfg-btn.test-success {
+  background: #e6f4ea;
+  color: #2e7d32;
+  border-color: #b7e4c7;
+  cursor: not-allowed;
+}
+
+.cfg-btn.test-success:hover {
+  border-color: #b7e4c7;
+  color: #2e7d32;
 }
 
 /* 响应式 */
