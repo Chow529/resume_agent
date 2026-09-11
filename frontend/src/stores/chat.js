@@ -87,7 +87,7 @@ export const useChatStore = defineStore('chat', () => {
     setLastAssistantOf(sessionStore.sessionId, content)
   }
 
-  async function sendMessage(message) {
+  async function sendMessage(message, options = {}) {
     const authStore = useAuthStore()
     const sessionStore = useSessionStore()
 
@@ -100,6 +100,7 @@ export const useChatStore = defineStore('chat', () => {
     }
 
     const sentSessionId = sessionStore.sessionId
+    const jdId = options.jdId ?? null
 
     // 确保该会话有独立的 messages 缓存，并切换为当前显示
     switchToSession(sentSessionId)
@@ -114,6 +115,7 @@ export const useChatStore = defineStore('chat', () => {
     statusText.value = 'AI 正在思考...'
 
     const { abortController, promise } = api.streamChat(sentSessionId, message, authStore.userId, {
+      jdId,
       onChunk: (content) => {
         // 直接追加到 sentSessionId 对应的缓存，无论用户是否切换会话
         appendToLastAssistantOf(sentSessionId, content)

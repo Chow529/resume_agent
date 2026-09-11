@@ -2,12 +2,18 @@
 智联招聘爬虫 - 支持自定义地区和关键词
 使用 curl_cffi 模拟 Chrome TLS 指纹绕过反爬
 输出 CSV 文件
+
+除爬取接口外，还包含岗位爬取缓存与后台「爬取+摘要+向量化入库」逻辑
+（供 agent 工具与采集模块复用）。
 """
 import csv
 import json
 import re
 import time
 import os
+import threading
+from html import unescape
+from pathlib import Path
 from datetime import datetime
 from curl_cffi import requests
 
@@ -56,6 +62,43 @@ CITY_CODE_MAP = {
 PAGE_SIZE = 20
 REQUEST_DELAY = 2       # 请求间隔（秒），避免反爬
 
+# 岗位详情抓取（列表页只有截断的 jobDescription，完整「岗位职责/任职要求」在详情页）
+DETAIL_FETCH_LIMIT = 30          # 单次最多抓取多少条岗位详情
+DETAIL_FETCH_CONCURRENCY = 5     # 详情页并发数
+DETAIL_FETCH_TIME_BUDGET = 60    # 详情抓取时间预算（秒），超时用已抓到的数据
+
+# 详情缺失时的兜底文案（保证「岗位职责」字段非空，面试有据可依）
+_JD_FALLBACK_TEMPLATE = (
+    "招聘方未提供详细岗位职责描述，面试将围绕岗位名称、技能要求"
+    "{skills}及相关项目经验展开。"
+)
+
+
+def _resolve_ca_bundle():
+    """返回可用于 TLS 校验的 CA 文件路径。
+
+    libcurl(Windows) 无法加载含非 ASCII 字符的路径（本项目虚拟环境路径含中文，
+    会报 "error setting certificate verify locations"），此时把 certifi 证书复制到
+    ASCII 临时目录后再使用；异常时回退 True（交由底层默认处理）。
+    """
+    try:
+        import shutil
+        import tempfile
+        import certifi
+
+        path = certifi.where()
+        if path.isascii():
+            return path
+        dst = Path(tempfile.gettempdir()) / "zhaopin_cacert.pem"
+        if not dst.is_file():
+            shutil.copyfile(path, dst)
+        return str(dst)
+    except Exception:
+        return True
+
+
+_CA_BUNDLE = _resolve_ca_bundle()
+
 
 def extract_state_from_html(html: str) -> dict:
     """从 HTML 中提取 __INITIAL_STATE__ JSON 数据"""
@@ -94,6 +137,7 @@ def search_jobs(keyword: str, city_code: str, page: int = 1) -> dict:
             headers=headers,
             impersonate="chrome120",
             timeout=10,
+            verify=_CA_BUNDLE,
         )
         return extract_state_from_html(r.text)
     except Exception as e:
@@ -139,21 +183,123 @@ def parse_job(pos: dict) -> dict:
         "招聘人数": pos.get("recruitNumber", ""),
         "职位类型": pos.get("workType", ""),
         "发布日期": pos.get("publishTime", ""),
+        # 列表页自带的职位描述（约 70 字截断预览），仅作详情抓取失败时的兜底
+        "职位描述": pos.get("jobDescription", "") or "",
         "职位URL": position_url,
         "公司URL": pos.get("companyUrl", ""),
         "搜索关键词": "",  # 后续填充
     }
 
 
-def scrape_all(city_name: str, keywords: list, time_budget: int = 60) -> list:
+def _html_to_text(text: str) -> str:
+    """把 JD 描述中的 HTML 片段转为纯文本（保留换行）"""
+    if not text:
+        return ""
+    text = re.sub(r"(?i)<br\s*/?>", "\n", text)
+    text = re.sub(r"(?i)</(p|div|li|tr|h[1-6])>", "\n", text)
+    text = re.sub(r"<[^>]+>", "", text)
+    text = unescape(text)
+    return re.sub(r"\n{3,}", "\n\n", text).strip()
+
+
+def fetch_job_detail(url: str) -> str:
+    """抓取岗位详情页，返回完整 JD 文本（含岗位职责/任职要求）；失败返回空串"""
+    if not url:
+        return ""
+    headers = {
+        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
+        "Accept-Language": "zh-CN,zh;q=0.9",
+    }
+    try:
+        r = requests.get(url, headers=headers, impersonate="chrome120", timeout=15, verify=_CA_BUNDLE)
+        if r.status_code != 200:
+            return ""
+        state = extract_state_from_html(r.text)
+        position = (state.get("jobDetail") or {}).get("detailedPosition") or {}
+        # description 通常为纯文本，个别岗位带 HTML；jobDesc 为 <br> 分隔的 HTML
+        return _html_to_text(position.get("description") or "") or _html_to_text(position.get("jobDesc") or "")
+    except Exception as e:
+        print(f"  [详情] 抓取失败 {url}: {e}")
+        return ""
+
+
+def _ensure_description(job: dict) -> dict:
+    """保证每条岗位的「职位描述」非空：详情 > 列表预览 > 结构化字段兜底"""
+    desc = (job.get("职位描述") or "").strip()
+    if not desc:
+        skills = (job.get("技能标签") or "").strip()
+        desc = _JD_FALLBACK_TEMPLATE.format(skills=f"（{skills}）" if skills else "")
+    job["职位描述"] = desc
+    return job
+
+
+def enrich_jobs_with_detail(
+    jobs: list,
+    limit: int = None,
+    concurrency: int = None,
+    time_budget: int = None,
+    on_progress=None,
+) -> list:
+    """为岗位补充完整 JD：并发抓详情页覆盖「职位描述」，失败保留列表预览，最后统一兜底
+
+    Args:
+        jobs: parse_job 产出的岗位列表（原地修改并返回）
+        limit: 最多抓取多少条详情（默认 DETAIL_FETCH_LIMIT）
+        concurrency: 并发数（默认 DETAIL_FETCH_CONCURRENCY）
+        time_budget: 时间预算秒（默认 DETAIL_FETCH_TIME_BUDGET）
+        on_progress: 可选进度回调 on_progress("详情", done, done, total)
+    """
+    limit = DETAIL_FETCH_LIMIT if limit is None else limit
+    concurrency = DETAIL_FETCH_CONCURRENCY if concurrency is None else concurrency
+    time_budget = DETAIL_FETCH_TIME_BUDGET if time_budget is None else time_budget
+
+    targets = [j for j in jobs if j.get("职位URL")][:limit]
+    if targets:
+        from concurrent.futures import ThreadPoolExecutor, as_completed, TimeoutError as FuturesTimeout
+
+        total = len(targets)
+        done = 0
+        pool = ThreadPoolExecutor(max_workers=concurrency)
+        futures = {pool.submit(fetch_job_detail, j["职位URL"]): j for j in targets}
+        try:
+            for fut in as_completed(futures, timeout=time_budget):
+                job = futures[fut]
+                try:
+                    desc = (fut.result() or "").strip()
+                except Exception:
+                    desc = ""
+                if desc:
+                    job["职位描述"] = desc
+                done += 1
+                if on_progress:
+                    try:
+                        on_progress("详情", done, done, total)
+                    except Exception:
+                        pass
+        except FuturesTimeout:
+            print(f"  ⏰ 详情抓取超过预算 {time_budget}s，已抓取 {done}/{total} 条")
+        finally:
+            pool.shutdown(wait=False, cancel_futures=True)
+        print(f"  📄 岗位详情抓取完成：{done}/{total} 条")
+
+    # 统一兜底，保证「职位描述」字段都有内容
+    for j in jobs:
+        _ensure_description(j)
+    return jobs
+
+
+def scrape_all(city_name: str, keywords: list, time_budget: int = 60, on_progress=None, with_detail: bool = True) -> list:
     """
     主爬取逻辑
-    
+
     Args:
         city_name: 城市名称，如 "成都"
         keywords: 搜索关键词列表，如 ["AI智能体", "AI Agent"]
         time_budget: 爬取时间预算（秒），超时立即返回已收集的数据
-    
+        on_progress: 可选进度回调 on_progress(keyword, page, collected, total_pages)，
+            每处理完一页调用一次，不影响原有爬取逻辑
+        with_detail: 是否抓取岗位详情页补充完整 JD（岗位职责/任职要求）
+
     Returns:
         list: 职位数据列表
     """
@@ -163,11 +309,18 @@ def scrape_all(city_name: str, keywords: list, time_budget: int = 60) -> list:
         print(f"❌ 错误：不支持的城市 '{city_name}'")
         print(f"   支持的城市列表: {', '.join(CITY_CODE_MAP.keys())}")
         return []
-    
+
     start_time = time.time()
     all_jobs = {}  # 用 jobId 去重
     total_pages = 0
     total_positions = 0
+
+    def _notify(keyword: str, page: int, pages: int):
+        if on_progress:
+            try:
+                on_progress(keyword, page, len(all_jobs), pages)
+            except Exception:
+                pass
 
     for keyword in keywords:
         # 时间预算检查：超时则停止爬取，返回已收集数据
@@ -194,10 +347,12 @@ def scrape_all(city_name: str, keywords: list, time_budget: int = 60) -> list:
             if job_id and job_id not in all_jobs:
                 parsed = parse_job(pos)
                 parsed["搜索关键词"] = keyword
+                parsed["职位ID"] = str(job_id)
                 all_jobs[job_id] = parsed
 
         total_pages += pages
         total_positions += position_count
+        _notify(keyword, 1, pages)
 
         # 获取后续页面
         for page in range(2, pages + 1):
@@ -214,11 +369,25 @@ def scrape_all(city_name: str, keywords: list, time_budget: int = 60) -> list:
                 if job_id and job_id not in all_jobs:
                     parsed = parse_job(pos)
                     parsed["搜索关键词"] = keyword
+                    parsed["职位ID"] = str(job_id)
                     all_jobs[job_id] = parsed
+            _notify(keyword, page, pages)
 
         time.sleep(REQUEST_DELAY)
 
-    return list(all_jobs.values())
+    jobs = list(all_jobs.values())
+
+    # 抓取岗位详情页，补全「岗位职责/任职要求」（列表页只有截断预览）
+    if with_detail and jobs:
+        print(f"\n{'='*60}")
+        print(f"📄 抓取岗位详情（最多 {DETAIL_FETCH_LIMIT} 条，预算 {DETAIL_FETCH_TIME_BUDGET}s）")
+        print(f"{'='*60}")
+        enrich_jobs_with_detail(jobs, on_progress=on_progress)
+    else:
+        for j in jobs:
+            _ensure_description(j)
+
+    return jobs
 
 
 def save_csv(jobs: list, filename: str):
@@ -244,16 +413,18 @@ def save_csv(jobs: list, filename: str):
     # print(f"📊 共 {len(jobs)} 条职位数据")
 
 
-def get_job_summary(city_name: str, keywords: list, output_filename: str = None, time_budget: int = 60):
+def get_job_summary(city_name: str, keywords: list, output_filename: str = None, time_budget: int = 60, on_progress=None, with_detail: bool = True):
     """
     灵活的任务总结函数
-    
+
     Args:
         city_name: 城市名称（中文），如 "成都"
         keywords: 搜索关键词列表，如 ["AI智能体", "AI Agent", "大模型 agent"]
         output_filename: 输出文件名（可选），如不指定则自动生成
         time_budget: 爬取时间预算（秒），默认 60 秒，超时使用已收集数据
-    
+        on_progress: 可选进度回调 on_progress(keyword, page, collected, total_pages)
+        with_detail: 是否抓取岗位详情页补充完整 JD（岗位职责/任职要求）
+
     Returns:
         dict: 包含职位列表和统计信息的字典
     """
@@ -274,7 +445,7 @@ def get_job_summary(city_name: str, keywords: list, output_filename: str = None,
     print("=" * 70)
 
     # 爬取数据 (静默模式,不打印进度)
-    jobs = scrape_all(city_name, keywords, time_budget=time_budget)
+    jobs = scrape_all(city_name, keywords, time_budget=time_budget, on_progress=on_progress, with_detail=with_detail)
 
     if not jobs:
         return {"jobs": [], "stats": {}}
@@ -434,6 +605,92 @@ def extract_salary_value(salary_str: str) -> float:
     except:
         pass
     return 0
+
+
+# ========== 岗位爬取缓存与后台入库 ==========
+# 相同城市+关键词组合在有效期内不重复爬取
+_JOB_CACHE_PATH = Path(__file__).resolve().parent.parent.parent / "rag_knowladge" / "job_cache.json"
+_JOB_CACHE_TTL = 86400  # 24 小时
+_JOB_SCRAPE_TIME_BUDGET = 90  # 爬虫时间预算（秒），超时则使用已收集数据
+_job_bg_lock = threading.Lock()
+_job_bg_thread: threading.Thread | None = None
+
+
+def _load_job_cache() -> dict:
+    if _JOB_CACHE_PATH.is_file():
+        try:
+            return json.loads(_JOB_CACHE_PATH.read_text(encoding="utf-8"))
+        except Exception:
+            pass
+    return {}
+
+
+def _save_job_cache(cache: dict):
+    _JOB_CACHE_PATH.parent.mkdir(parents=True, exist_ok=True)
+    _JOB_CACHE_PATH.write_text(json.dumps(cache, ensure_ascii=False), encoding="utf-8")
+
+
+def _cache_key(city: str, keywords: list) -> str:
+    sorted_kw = sorted(keywords)
+    return f"{city}|{'|'.join(sorted_kw)}"
+
+
+def _bg_scrape_and_store(city: str, keywords: list, ck: str):
+    """后台线程：爬取智联 JD + LLM 摘要 + 写入向量库（带时间预算兜底）
+
+    RAG 组件在函数内延迟导入，避免仅需要爬取能力的调用方引入向量库依赖。
+    """
+    global _job_bg_thread
+    try:
+        result = get_job_summary(city, keywords, output_filename=None, time_budget=_JOB_SCRAPE_TIME_BUDGET)
+        jobs = result.get("jobs", [])
+        if not jobs:
+            print("[后台] 爬虫未获取到 JD 数据")
+            return
+        from rag.ModelServer import SummServer
+        from rag.ChromaServer import ChromaServer
+
+        content = SummServer(jobs, "CHROMA_PROMPT").content
+        list_summ = [s for s in content.split('\n') if s.strip() and s.strip() != "none"]
+        if list_summ:
+            chroma = ChromaServer()
+            chroma.batch_storage(list_summ)
+        # 更新缓存
+        cache = _load_job_cache()
+        cache[ck] = int(time.time())
+        _save_job_cache(cache)
+        print(f"[后台] JD 爬取+向量化完成，{len(list_summ)} 条摘要已入库")
+    except Exception as e:
+        print(f"[后台] JD 爬取失败: {e}")
+    finally:
+        with _job_bg_lock:
+            _job_bg_thread = None
+
+
+def ensure_bg_scrape(city: str, keywords: list) -> bool:
+    """需要时在后台线程爬取 JD 并向量化入库（缓存有效期内不重复爬取）。
+
+    Returns:
+        True=已启动后台任务或任务已在运行；False=无有效入参
+    """
+    global _job_bg_thread
+    if not city or not keywords:
+        return False
+    ck = _cache_key(city, keywords)
+    cache = _load_job_cache()
+    cached_time = cache.get(ck, 0)
+    if (int(time.time()) - cached_time) < _JOB_CACHE_TTL:
+        return True  # 缓存有效，无需重复爬取
+    with _job_bg_lock:
+        if _job_bg_thread is not None and _job_bg_thread.is_alive():
+            return True  # 已有相同任务在跑
+        _job_bg_thread = threading.Thread(
+            target=_bg_scrape_and_store,
+            args=(city, keywords, ck),
+            daemon=True,
+        )
+        _job_bg_thread.start()
+    return True
 
 
 # ========== 使用示例 ==========

@@ -98,14 +98,14 @@ export function sendMessage(sessionId, message, userId) {
  * @param onConfigRequired 收到 config_required 事件时回调 (data) => void
  * @returns { abortController, promise } 调用 abortController.abort() 可本地中止
  */
-export function streamChat(sessionId, message, userId, { onChunk, onDone, onCancelled, onError, onConfigRequired } = {}) {
+export function streamChat(sessionId, message, userId, { onChunk, onDone, onCancelled, onError, onConfigRequired, jdId } = {}) {
   const abortController = new AbortController()
 
   const promise = (async () => {
     const res = await fetch(`/api/sessions/${encodeURIComponent(sessionId)}/chat`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json', 'Accept': 'text/event-stream' },
-      body: JSON.stringify({ message, user_id: userId }),
+      body: JSON.stringify({ message, user_id: userId, jd_id: jdId ?? null }),
       signal: abortController.signal
     })
 
@@ -267,5 +267,107 @@ export function saveModelConfig(config) {
 export function resetModelConfig() {
   return fetch('/api/config/reset', {
     method: 'POST'
+  }).then(handleResponse)
+}
+
+// ========== Data Center（数据采集 / 岗位JD） ==========
+
+export function getCollectorModules() {
+  return fetch('/api/data-center/modules').then(handleResponse)
+}
+
+/**
+ * 流式触发采集模块爬取
+ * @param module 模块 key（如 zhaopin）
+ * @param params 模块参数 { city, keywords, time_budget }
+ * @param callbacks { onProgress, onDone, onError }
+ */
+export function scrapeStream(userId, module, params, { onProgress, onDone, onError } = {}) {
+  const abortController = new AbortController()
+
+  const promise = (async () => {
+    const res = await fetch('/api/data-center/scrape/stream', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'Accept': 'text/event-stream' },
+      body: JSON.stringify({ user_id: userId, module, params }),
+      signal: abortController.signal
+    })
+
+    if (!res.ok) {
+      let msg = `HTTP ${res.status}`
+      try { const d = await res.json(); msg = d.detail || d.message || msg } catch {}
+      throw new Error(msg)
+    }
+
+    const reader = res.body.getReader()
+    const decoder = new TextDecoder('utf-8')
+    let buf = ''
+
+    while (true) {
+      const { value, done } = await reader.read()
+      if (done) break
+      buf += decoder.decode(value, { stream: true })
+
+      let idx
+      while ((idx = buf.indexOf('\n\n')) !== -1) {
+        const raw = buf.slice(0, idx)
+        buf = buf.slice(idx + 2)
+
+        let event = 'message'
+        let data = ''
+        for (const line of raw.split('\n')) {
+          if (line.startsWith('event:')) event = line.slice(6).trim()
+          else if (line.startsWith('data:')) data += line.slice(5).trim()
+        }
+        if (!data) continue
+
+        let payload = {}
+        try { payload = JSON.parse(data) } catch { payload = { message: data } }
+
+        if (event === 'progress' && onProgress) onProgress(payload)
+        else if (event === 'done' && onDone) onDone(payload)
+        else if (event === 'error' && onError) onError(payload)
+      }
+    }
+  })().catch(err => {
+    if (err.name === 'AbortError') return
+    if (onError) onError({ message: err.message })
+    else throw err
+  })
+
+  return { abortController, promise }
+}
+
+export function listJds(userId, scope, keyword) {
+  const params = new URLSearchParams({ user_id: userId, scope })
+  if (keyword) params.set('keyword', keyword)
+  return fetch(`/api/data-center/jds?${params.toString()}`).then(handleResponse)
+}
+
+export function getJdChoices(userId) {
+  return fetch(`/api/data-center/jds/choices?user_id=${encodeURIComponent(userId)}`).then(handleResponse)
+}
+
+/**
+ * 岗位使用排名
+ * @param scope personal 个人排名（本人JD按使用次数） | public 公用排名（所有用户使用汇总）
+ */
+export function listJdRanking(userId, scope) {
+  const params = new URLSearchParams({ scope })
+  if (userId !== undefined && userId !== null) params.set('user_id', userId)
+  return fetch(`/api/data-center/jds/ranking?${params.toString()}`).then(handleResponse)
+}
+
+export function setJdVisibility(jdId, userId, isPublic) {
+  return fetch(`/api/data-center/jds/${encodeURIComponent(jdId)}/visibility`, {
+    method: 'PUT',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ user_id: userId, is_public: isPublic ? 1 : 0 })
+  }).then(handleResponse)
+}
+
+export function deleteJd(jdId, userId) {
+  return fetch(`/api/data-center/jds/${encodeURIComponent(jdId)}?user_id=${encodeURIComponent(userId)}`, {
+    method: 'DELETE'
   }).then(handleResponse)
 }

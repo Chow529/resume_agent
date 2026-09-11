@@ -1,4 +1,4 @@
--- dmmdb.chat_session_contents 定义
+-- chat_session_contents 定义（与线上库结构核对一致）
 
 CREATE TABLE `chat_session_contents` (
   `id` int unsigned NOT NULL AUTO_INCREMENT COMMENT '消息ID',

@@ -59,32 +59,6 @@ class ChatSessionModel(BaseModel):
             return 0
         return self.update(session_id, data)
 
-    def ensure_interview_columns(self) -> None:
-        """幂等迁移：确保 chat_sessions 表含有面试状态字段
-
-        - status: initialized / interviewing / terminated
-        - question_count: 当前面试轮次
-        已存在的列不会重复添加，可在每次服务启动时安全调用。
-        """
-        rows = self.db.execute_query(
-            """SELECT COLUMN_NAME FROM information_schema.COLUMNS
-               WHERE TABLE_SCHEMA = %s AND TABLE_NAME = 'chat_sessions'""",
-            (self.db.database,),
-        )
-        existing = {r.get('COLUMN_NAME') for r in rows}
-        if 'status' not in existing:
-            self.db.execute_update(
-                "ALTER TABLE `chat_sessions` "
-                "ADD COLUMN status VARCHAR(32) NOT NULL DEFAULT 'initialized'",
-                ()
-            )
-        if 'question_count' not in existing:
-            self.db.execute_update(
-                "ALTER TABLE `chat_sessions` "
-                "ADD COLUMN question_count INT NOT NULL DEFAULT 0",
-                ()
-            )
-
     def update_interview_state(
         self,
         session_id: int,
@@ -100,6 +74,20 @@ class ChatSessionModel(BaseModel):
         if not data:
             return 0
         return self.update(session_id, data)
+
+    def update_selected_jd(self, session_id: int, jd_id: Optional[int]) -> int:
+        """更新会话当前面试选择的目标岗位 JD ID（jd_id 为 None 时清空选择）"""
+        return self.update(session_id, {'selected_jd_id': jd_id})
+
+    def get_interviewing_with_jd(self, user_id: int) -> Optional[Dict[str, Any]]:
+        """获取用户当前进行中且已选择目标岗位的面试会话（最新一个）"""
+        sql = (
+            f"SELECT * FROM `{self.table_name}` "
+            "WHERE user_id = %s AND status = 'interviewing' AND selected_jd_id IS NOT NULL "
+            "ORDER BY updated_at DESC LIMIT 1"
+        )
+        results = self.db.execute_query(sql, (user_id,))
+        return results[0] if results else None
 
 
 class ChatSessionContentModel(BaseModel):

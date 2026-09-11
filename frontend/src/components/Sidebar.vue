@@ -46,6 +46,15 @@
         <i class="fas fa-list"></i>
         <span>管理简历</span>
       </div>
+      <div
+        class="action-item"
+        :class="{ disabled: !authStore.isAuthenticated }"
+        id="dataCenterBtn"
+        @click="$emit('open-data-center')"
+      >
+        <i class="fas fa-database"></i>
+        <span>数据中心</span>
+      </div>
     </div>
 
     <!-- 会话历史 -->
@@ -107,7 +116,7 @@ import { emit as busEmit } from '@/utils/events.js'
 const props = defineProps({
   disabled: { type: Boolean, default: false }
 })
-const emit = defineEmits(['open-upload-resume', 'open-manage-resume'])
+const emit = defineEmits(['open-upload-resume', 'open-manage-resume', 'open-data-center', 'start-interview'])
 
 const authStore = useAuthStore()
 const sessionStore = useSessionStore()
@@ -145,6 +154,11 @@ function sendCommand(cmd) {
   if (!configStore.configReady) {
     chatStore.addMessage('assistant', '⚠️ 请先完成 AI 模型配置后再使用该功能。[点击配置](open-config)')
     busEmit('open-config')
+    return
+  }
+  // /start 先弹出岗位选择，由用户从个人/公用 JD 中选定目标岗位后再发起面试
+  if (cmd === '/start') {
+    emit('start-interview')
     return
   }
   chatStore.sendMessage(cmd)

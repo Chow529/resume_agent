@@ -8,7 +8,7 @@ import { emit as busEmit } from '@/utils/events.js'
 import MessageItem from './MessageItem.vue'
 import VoiceModal from './VoiceModal.vue'
 
-const emit = defineEmits(['open-help', 'open-kb', 'open-user-manage', 'open-model-config'])
+const emit = defineEmits(['open-help', 'open-kb', 'open-user-manage', 'open-model-config', 'start-interview'])
 
 const chatStore = useChatStore()
 const authStore = useAuthStore()
@@ -58,6 +58,16 @@ watch(messages, () => scrollToBottom(), { deep: true })
 watch(isTyping, () => scrollToBottom())
 onMounted(() => scrollToBottom())
 
+// 与后端 prompt/intent.yml 的 start_interview 意图保持一致：
+// commands 精确匹配，keywords 包含匹配。命中时先弹出岗位选择框，而不是直接发到后端
+const START_COMMANDS = ['/start']
+const START_KEYWORDS = ['开始面试', '进行面试', '我要面试', '开始吧', '面试开始', '开始提问', '开始']
+
+function isStartInterviewText(text) {
+  const lower = text.trim().toLowerCase()
+  return START_COMMANDS.includes(lower) || START_KEYWORDS.some(kw => lower.includes(kw))
+}
+
 // 发送消息
 function sendMessage() {
   const text = inputText.value.trim()
@@ -67,6 +77,13 @@ function sendMessage() {
     return
   }
   if (!canSend.value) return
+  // 命中开始面试意图（/start、开始面试等）：先选择目标岗位 JD 再开始面试
+  if (isStartInterviewText(text)) {
+    emit('start-interview')
+    inputText.value = ''
+    resetTextareaHeight()
+    return
+  }
   chatStore.sendMessage(text)
   inputText.value = ''
   resetTextareaHeight()

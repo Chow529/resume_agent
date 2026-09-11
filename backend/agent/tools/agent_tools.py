@@ -1,7 +1,4 @@
 import sys
-import json
-import time
-import threading
 from pathlib import Path
 from typing import Annotated
 
@@ -14,69 +11,14 @@ if str(project_root) not in sys.path:
 # 现在可以正常导入
 from rag.ModelServer import JobServies, SummServer
 from rag.ChromaServer import ChromaServer
-from .zhaopin_scraper import get_job_summary
 from langchain.tools import tool
 from utils.logging_tool import logger
 from .tool_Servers import tool_registry
 
-# ========== 岗位爬取缓存 ==========
-# 相同城市+关键词组合在有效期内不重复爬取
-_JOB_CACHE_PATH = project_root / "backend" / "rag_knowladge" / "job_cache.json"
-_JOB_CACHE_TTL = 86400  # 24 小时
-_JOB_SCRAPE_TIME_BUDGET = 90  # 爬虫时间预算（秒），超时则使用已收集数据
-_job_bg_lock = threading.Lock()
-_job_bg_thread: threading.Thread | None = None
-
-
-def _load_job_cache() -> dict:
-    if _JOB_CACHE_PATH.is_file():
-        try:
-            return json.loads(_JOB_CACHE_PATH.read_text(encoding="utf-8"))
-        except Exception:
-            pass
-    return {}
-
-
-def _save_job_cache(cache: dict):
-    _JOB_CACHE_PATH.parent.mkdir(parents=True, exist_ok=True)
-    _JOB_CACHE_PATH.write_text(json.dumps(cache, ensure_ascii=False), encoding="utf-8")
-
-
-def _cache_key(city: str, keywords: list) -> str:
-    sorted_kw = sorted(keywords)
-    return f"{city}|{'|'.join(sorted_kw)}"
-
-
-def _bg_scrape_and_store(city: str, keywords: list, cache_key: str):
-    """后台线程：爬取智联 JD + LLM 摘要 + 写入向量库（带时间预算兜底）"""
-    global _job_bg_thread
-    try:
-        # 时间预算：爬虫最多执行 _JOB_SCRAPE_TIME_BUDGET 秒
-        result = get_job_summary(city, keywords, output_filename=None, time_budget=_JOB_SCRAPE_TIME_BUDGET)
-        jobs = result.get("jobs", [])
-        if not jobs:
-            logger.info("[后台] 爬虫未获取到 JD 数据")
-            return
-        content = SummServer(jobs, "CHROMA_PROMPT").content
-        list_summ = [s for s in content.split('\n') if s.strip() and s.strip() != "none"]
-        if list_summ:
-            chroma = ChromaServer()
-            chroma.batch_storage(list_summ)
-        # 更新缓存
-        cache = _load_job_cache()
-        cache[cache_key] = int(time.time())
-        _save_job_cache(cache)
-        logger.info(f"[后台] JD 爬取+向量化完成，{len(list_summ)} 条摘要已入库")
-    except Exception as e:
-        logger.error(f"[后台] JD 爬取失败: {e}", exc_info=True)
-    finally:
-        with _job_bg_lock:
-            _job_bg_thread = None
-
 
 @tool_registry.register()
 def get_job_working(user_id: Annotated[str, "当前用户的 user_id，必填，用于读取该用户的激活简历"] = None) -> str:
-    """面试开始时调用：读取面试者简历，提取其意向岗位与意向城市。返回逗号分隔的岗位关键词，最后一个元素为意向城市，可直接作为 get_jd_content 的入参。"""
+    """面试开始时调用：读取面试者简历，提取其意向岗位与意向城市。返回逗号分隔的岗位关键词，最后一个元素为意向城市，可作为 get_jd_content 的 key 入参（仅未选岗场景使用）。"""
     if not user_id:
         return "错误：需要提供 user_id 才能获取简历信息,模型无需重试"
     try:
@@ -92,33 +34,14 @@ def get_job_working(user_id: Annotated[str, "当前用户的 user_id，必填，
         # [1] LLM 提取岗位关键词与意向城市
         content_str = JobServies.get_job(resume_text=resume_content)
 
-        # [2] 爬虫 + 向量化存储逻辑暂时屏蔽（当前不需要存储 JD 数据）
-        # str_list = content_str.split(',')
-        # city = str_list[-1].strip()
-        # list_kwargs = [k.strip() for k in str_list[:-1]]
-        #
-        # # 检查缓存：有效期内不重复爬取
-        # ck = _cache_key(city, list_kwargs)
-        # cache = _load_job_cache()
-        # cached_time = cache.get(ck, 0)
-        # cache_valid = (int(time.time()) - cached_time) < _JOB_CACHE_TTL
-        #
-        # if not cache_valid:
-        #     # 检查后台线程是否已在运行相同任务
-        #     with _job_bg_lock:
-        #         global _job_bg_thread
-        #         if _job_bg_thread is None or not _job_bg_thread.is_alive():
-        #             # 启动后台线程：爬取 JD + LLM 摘要 + 写入向量库
-        #             _job_bg_thread = threading.Thread(
-        #                 target=_bg_scrape_and_store,
-        #                 args=(city, list_kwargs, ck),
-        #                 daemon=True,
-        #             )
-        #             _job_bg_thread.start()
-        #             logger.info(f"[后台] 已启动爬虫任务: {ck}")
+        # [2] 爬虫 + 向量化存储逻辑暂时屏蔽（当前不需要存储 JD 数据）。
+        # 爬虫与后台入库能力已迁移至 collectors/tools/zhaopin_scraper.py，如需恢复：
+        #   from collectors.tools.zhaopin_scraper import ensure_bg_scrape
+        #   city = content_str.split(',')[-1].strip()
+        #   list_kwargs = [k.strip() for k in content_str.split(',')[:-1]]
+        #   ensure_bg_scrape(city, list_kwargs)  # 缓存有效期内不重复爬取，后台线程爬取+摘要+写入向量库
 
         # 仅返回岗位关键词与城市，由模型自行决定是否继续调用 get_jd_content
-        # print(content_str)
         return content_str
 
     except (ValueError, TypeError):
@@ -128,12 +51,61 @@ def get_job_working(user_id: Annotated[str, "当前用户的 user_id，必填，
 
 
 @tool_registry.register()
-def get_jd_content(key: Annotated[str, "岗位关键词，多个岗位用英文逗号分隔，直接传入 get_job_working 的返回值"]) -> str:
-    """获取岗位的详细 JD（职位描述）。在拿到 get_job_working 返回的岗位关键词后调用，key 直接传入该返回结果（多个岗位用英文逗号分隔）。"""
-    result = key.split(",")
+def get_jd_content(
+    user_id: Annotated[str, "当前用户的 user_id，必填"],
+    key: Annotated[str, "岗位关键词：直接传入 get_job_working 的返回值（多个岗位用英文逗号分隔），必填"],
+) -> str:
+    """获取面试目标岗位的JD详情。面试开始阶段在 get_job_working 之后调用。优先返回用户已选择的目标岗位；未选岗时先在岗位库中按关键词匹配，未匹配到再回退向量库检索。"""
+    # [1] 优先：当前面试会话所选的目标岗位 JD（新流程：以用户选定的 JD 为准）
+    if user_id:
+        try:
+            from sqlClass.chat_session_model import ChatSessionModel
+            from sqlClass.job_jd_model import JobJdModel
+
+            session = ChatSessionModel().get_interviewing_with_jd(int(user_id))
+            jd_id = session.get("selected_jd_id") if session else None
+            if jd_id:
+                jd = JobJdModel().get_by_id(int(jd_id))
+                if not jd:
+                    return "所选目标岗位JD不存在"
+                content = "目标岗位JD信息如下:\n" + (jd.get("jd_content") or "")
+                return SummServer(content, "SUMM_PROMPT").content
+        except (ValueError, TypeError):
+            return f"错误：无效的 user_id {user_id},模型无需重试"
+        except Exception as e:
+            logger.error(f"get_jd_content 获取所选JD失败: {e}")
+            return f"错误：获取所选岗位JD时发生异常 - {str(e)},模型无需重试"
+
+    if not key:
+        # 引导模型补齐 key 重试，而不是放弃获取 JD
+        return "未提供岗位关键词，请传入 key 参数（get_job_working 的返回值）后重试"
+
+    # [2] 其次：按关键词在岗位库(job_jds)中匹配（本人数据优先，其次公用数据），命中则用该岗位的 JD 内容
+    kws = [k.strip() for k in key.split(",") if k.strip()]
+    try:
+        from sqlClass.job_jd_model import JobJdModel
+
+        rows = JobJdModel().search_choices(int(user_id), kws) if user_id else []
+        if rows:
+            # 关键词命中数最多者优先；并列时取 SQL 排序靠前者（本人数据优先、使用次数高者优先）
+            def _hit_count(row):
+                text = f"{row.get('job_name') or ''}{row.get('company_name') or ''}{row.get('keyword') or ''}"
+                return sum(1 for kw in kws if kw in text)
+
+            best = max(rows, key=_hit_count)
+            jd_text = best.get("jd_content") or best.get("job_name") or ""
+            head = (
+                f"【匹配岗位】{best.get('job_name') or '未命名岗位'}"
+                f"（{best.get('company_name') or '未知公司'}，"
+                f"{best.get('city') or ''} {best.get('salary') or ''}）\n"
+            )
+            return head + SummServer("目标岗位JD信息如下:\n" + jd_text, "SUMM_PROMPT").content
+    except Exception as e:
+        logger.error(f"get_jd_content 检索岗位库失败: {e}")
+
+    # [3] 兜底：岗位库无匹配时按关键词向量检索（兼容历史数据）
     content = ""
-    output_content = ""
-    for r in result:
+    for r in kws:
         content += f"{r} 的 JD 信息如下:\n"
         content_doc = ChromaServer().get_retriever().invoke(r)
         if not content_doc:
@@ -141,9 +113,7 @@ def get_jd_content(key: Annotated[str, "岗位关键词，多个岗位用英文�
             continue
         for i, doc in enumerate(content_doc):
             content += f"JD 信息{i+1}:\n{doc.page_content}\n\n"
-    output_content = SummServer(content, "SUMM_PROMPT").content
-    # print(output_content)
-    return output_content
+    return SummServer(content, "SUMM_PROMPT").content
 
 
 @tool_registry.register()

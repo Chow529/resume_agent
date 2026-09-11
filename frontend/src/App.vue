@@ -15,6 +15,8 @@ import UploadResumeModal from '@/components/UploadResumeModal.vue'
 import ManageResumeModal from '@/components/ManageResumeModal.vue'
 import KbModal from '@/components/KbModal.vue'
 import ModelConfigModal from '@/components/ModelConfigModal.vue'
+import DataCenterModal from '@/components/DataCenterModal.vue'
+import JDSelectModal from '@/components/JDSelectModal.vue'
 
 const authStore = useAuthStore()
 const sessionStore = useSessionStore()
@@ -29,6 +31,8 @@ const showUploadResume = ref(false)
 const showManageResume = ref(false)
 const showKb = ref(false)
 const showModelConfig = ref(false)
+const showDataCenter = ref(false)
+const showJdSelect = ref(false)
 
 function openModelConfig() {
   showModelConfig.value = true
@@ -87,6 +91,33 @@ function openManageResume() {
   showManageResume.value = true
 }
 
+// 数据中心（岗位 JD 采集）
+function openDataCenter() {
+  if (!authStore.isAuthenticated) return
+  showDataCenter.value = true
+}
+
+// 开始面试：先选择目标岗位 JD（个人数据 / 公用数据）
+function startInterview() {
+  if (!authStore.isAuthenticated || sessionStore.loading) return
+  if (!configStore.configReady) {
+    chatStore.addMessage('assistant', '⚠️ 请先完成 AI 模型配置后再使用该功能。[点击配置](open-config)')
+    openModelConfig()
+    return
+  }
+  showJdSelect.value = true
+}
+
+// 选定 JD 后携带 jdId 发起 /start 面试
+function handleJdSelected(jd) {
+  chatStore.sendMessage('/start', { jdId: jd.id })
+}
+
+// 跳过选岗：不携带 jdId 发起 /start，走旧流程（Agent 通过工具从简历提取意向并查询岗位）
+function handleJdSkip() {
+  chatStore.sendMessage('/start')
+}
+
 function handleResumeUploaded() {
   chatStore.addMessage('assistant', '简历上传成功！您可以开始面试了。')
 }
@@ -102,12 +133,15 @@ function handleConfigSaved() {
     <Sidebar
       @open-upload-resume="openUploadResume"
       @open-manage-resume="openManageResume"
+      @open-data-center="openDataCenter"
+      @start-interview="startInterview"
     />
     <ChatPanel
       @open-help="openHelp"
       @open-kb="openKb"
       @open-user-manage="openUserManage"
       @open-model-config="openModelConfig"
+      @start-interview="startInterview"
     />
   </div>
 
@@ -119,6 +153,14 @@ function handleConfigSaved() {
   <ManageResumeModal v-model="showManageResume" />
   <KbModal v-model="showKb" />
   <ModelConfigModal v-model="showModelConfig" @saved="handleConfigSaved" />
+  <JDSelectModal
+    v-model="showJdSelect"
+    :user-id="authStore.userId"
+    @select="handleJdSelected"
+    @skip="handleJdSkip"
+    @open-data-center="openDataCenter"
+  />
+  <DataCenterModal v-model="showDataCenter" :user-id="authStore.userId" />
 </template>
 
 <style scoped>

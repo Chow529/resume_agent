@@ -51,6 +51,39 @@ _boundary_prompt = (load_yaml_config("prompt/prompt.yml") or {}).get("BOUNDARY_P
 _help_prompt = (load_yaml_config("prompt/prompt.yml") or {}).get("HELP_PROMPT", "")
 
 
+def _build_jd_interview_prompt(session_id: str, user_id: int, jd_id: Optional[int] = None) -> Optional[str]:
+    """根据会话已选定的目标岗位 JD + 用户激活简历，构造面试系统提示词。
+
+    jd_id 不传时取会话中已持久化的 selected_jd_id（面试后续轮次使用）；
+    会话未选择 JD、JD 不可访问或没有可用简历时返回 None。
+    面试开始后的每一轮都会重新注入，保证 AI 全程围绕目标岗位提问与评价。
+    """
+    jd_id = jd_id or memory.get_selected_jd_id(session_id)
+    if not jd_id:
+        return None
+    from sqlClass.job_jd_model import JobJdModel
+    from sqlClass.resume_model import ResumeModel
+
+    jd_model = JobJdModel()
+    jd_record = jd_model.get_by_id(jd_id)
+    if not jd_record or not jd_model.is_owner_or_public(jd_id, user_id):
+        return None
+    active_resume = ResumeModel().get_active(user_id)
+    if not active_resume or not active_resume.get("resume_text"):
+        return None
+
+    jd_text = jd_record.get("jd_content") or jd_record.get("job_name") or ""
+    print(jd_text)
+    return (
+        "用户已选择目标岗位，本场面试必须严格围绕该岗位 JD 的任职要求，"
+        "并结合用户简历中的技术背景与项目经历进行提问和评估，不要提问与目标岗位无关的内容。\n\n"
+        f"【当前用户】user_id={user_id}（调用查询简历/岗位信息类工具时使用）\n\n"
+        f"【目标岗位JD】\n{jd_text}\n\n"
+        f"【用户简历】\n{active_resume['resume_text']}"
+    )
+
+
+
 def _match_intent(message: str) -> Optional[str]:
     """基于关键字识别用户意图，未匹配任何意图时返回 "other"""
     msg_lower = message.strip().lower()
@@ -68,21 +101,13 @@ def _match_intent(message: str) -> Optional[str]:
 
 app = FastAPI(title="面试模拟 Agent Web版", version="1.0.0")
 
+# 数据中心路由（岗位JD采集等）。后续新增采集类路由时在此 include 即可
+from routers.data_center import router as data_center_router
+app.include_router(data_center_router)
+
 # 全局变量
 _agent = None
 _chroma_server = None
-
-
-@app.on_event("startup")
-async def _ensure_db_schema():
-    """启动时幂等迁移：为 chat_sessions 补上面试状态字段（status / question_count）。
-    数据库不可用时不阻断服务启动。"""
-    try:
-        from sqlClass.chat_session_model import ChatSessionModel
-        await asyncio.to_thread(ChatSessionModel().ensure_interview_columns)
-        logger.info("面试状态字段迁移检查完成")
-    except Exception as e:
-        logger.warning(f"面试状态字段迁移跳过（数据库暂不可用？）: {e}")
 
 
 # ─────────────────────────────────────────────────────
@@ -176,11 +201,13 @@ def build_agent():
 
     def call_model(state):
         messages = [SystemMessage(content=system_prompt)] + state["messages"]
-        return {"messages": [chat_model.invoke(messages)]}
+        response = chat_model.invoke(messages)
+        # print(response)
+        return {"messages": [response]}
 
     def should_continue(state):
         if isinstance(state["messages"][-1], AIMessage) and state["messages"][-1].tool_calls:
-            # print(state["messages"][-1])
+            # print(state["messages"][-1].tool_calls)
             return "tools"
         return END
 
@@ -895,6 +922,13 @@ async def chat(session_id: str, request: Request):
     if uid:
         memory.set_user_id(session_id, int(uid))
 
+    # 开始面试时用户选择的目标岗位 JD ID（来自数据中心的个人/公用 JD）
+    raw_jd_id = data.get("jd_id")
+    try:
+        selected_jd_id = int(raw_jd_id) if raw_jd_id is not None else None
+    except (TypeError, ValueError):
+        selected_jd_id = None
+
     if not memory.get_db_session_id(session_id) and memory.get_user_id(session_id):
         db_session_id = memory.ensure_db_session(session_id, memory.get_user_id(session_id))
         logger.info(f"自动创建数据库会话: {db_session_id}")
@@ -918,11 +952,44 @@ async def chat(session_id: str, request: Request):
         if not user_id:
             direct_reply = "[请先登录] 请先登录或注册用户，然后上传简历"
             response_type = "error"
+        elif selected_jd_id:
+            # 新流程：用户已从数据中心选择目标岗位 JD，结合该 JD 与个人简历进行面试
+            from sqlClass.job_jd_model import JobJdModel
+            jd_model = JobJdModel()
+            jd_record = jd_model.get_by_id(selected_jd_id)
+            if not jd_record or not jd_model.is_owner_or_public(selected_jd_id, user_id):
+                direct_reply = "[岗位不可用] 选择的岗位 JD 不存在或无权访问，请重新选择后再开始面试"
+                response_type = "error"
+            else:
+                job_prompt = _build_jd_interview_prompt(session_id, user_id, selected_jd_id)
+                if not job_prompt:
+                    direct_reply = "[请先上传简历] 请先上传并激活简历后再开始面试"
+                    response_type = "error"
+                else:
+                    memory.clear_history(session_id)
+                    # 立即落库：interviewing 状态 + 所选 JD，防止首轮推理中断后状态丢失
+                    memory.set_status(session_id, "interviewing")
+                    memory.set_selected_jd_id(session_id, selected_jd_id)
+                    # 岗位使用次数 +1（个人/公用排名统计依据），失败不影响面试开始
+                    try:
+                        jd_model.increment_use_count(selected_jd_id)
+                    except Exception as e:
+                        logger.error(f"岗位使用次数统计失败 jd_id={selected_jd_id}: {e}")
+                    memory.add_user_message(
+                        session_id,
+                        f"我选择岗位「{jd_record.get('job_name') or '目标岗位'}」开始面试，"
+                        f"请先让我做自我介绍，然后结合该岗位JD开始提问。"
+                    )
+                    agent_messages = memory.build_prompt_messages(session_id, system_prefix=job_prompt)
+                    post_status = "interviewing"
+                    response_type = "interview_start"
         else:
+            # 兼容旧流程：未选择 JD 时由 Agent 自主调用工具获取简历/岗位信息
             memory.clear_history(session_id)
             # 立即把状态落库为 interviewing，不必等首轮回复完成，
             # 防止首轮推理过程中用户退出导致状态仍停留在旧值
             memory.set_status(session_id, "interviewing")
+            memory.set_selected_jd_id(session_id, None)
             memory.add_user_message(session_id, f"开始面试，请先获取我的简历信息,我的user_id是{user_id}")
             agent_messages = memory.get_history(session_id)
             post_status = "interviewing"
@@ -931,6 +998,7 @@ async def chat(session_id: str, request: Request):
     elif intent == "end_interview":
         memory.clear_history(session_id)
         memory.set_status(session_id, "terminated")
+        memory.set_selected_jd_id(session_id, None)
         direct_reply = "面试已结束，可以输入 /start 重新开始"
         response_type = "interview_end"
 
@@ -978,15 +1046,23 @@ async def chat(session_id: str, request: Request):
         memory.add_user_message(session_id, user_message)
         current_round = memory.increment_question_count(session_id)
         boundary = _boundary_prompt if intent == "other" else None
+        # JD 面试模式：每一轮都重新注入「目标岗位JD + 用户简历」系统提示词，
+        # 确保 AI 在整场面试中始终围绕所选岗位提问、评分
+        jd_prompt = None
+        current_user_id = memory.get_user_id(session_id)
+        if current_user_id:
+            jd_prompt = _build_jd_interview_prompt(session_id, current_user_id)
+        system_parts = [p for p in (jd_prompt, boundary) if p]
+        system_prefix = "\n\n".join(system_parts) if system_parts else None
         print(current_round)
         if current_round >= 11:
             extra = [HumanMessage(content="以上是我全部的回答,请根据我的回答以及我的表现,给出综合汇总评价以及评分。")]
-            agent_messages = memory.build_prompt_messages(session_id, extra_messages=extra, system_prefix=boundary)
+            agent_messages = memory.build_prompt_messages(session_id, extra_messages=extra, system_prefix=system_prefix)
             post_status = "terminated"
             clear_history_after = True
             response_type = "interview_end"
         else:
-            agent_messages = memory.build_prompt_messages(session_id, system_prefix=boundary)
+            agent_messages = memory.build_prompt_messages(session_id, system_prefix=system_prefix)
 
     # 重置当前会话的取消事件（按 session_id 隔离，多会话互不干扰）
     cancel_event = _get_cancel_event(session_id)
@@ -1020,6 +1096,24 @@ async def chat(session_id: str, request: Request):
 
         def run_agent():
             """后台线程：迭代 agent.stream，把 chunks 通过 queue 传回异步侧"""
+            # 按消息聚合流式分片，只输出「不调用工具」的消息（即最终给用户看的面试内容）。
+            # 工具调用前的过程性叙述（如"让我先调取一下您的简历信息"）在流式过程中拿不到
+            # 完整 tool_calls（要等该条消息最后一个分片才补齐），所以必须整条消息收完再决定
+            # 是否展示：含工具调用的整条丢弃，不含工具调用的整条输出。
+            buf_text = []
+            buf_suppressed = False
+            cur_msg_id = None
+
+            def _close_message():
+                """一条 agent 消息结束：非工具调用消息则输出，否则丢弃"""
+                nonlocal buf_text, buf_suppressed
+                if buf_text and not buf_suppressed:
+                    loop.call_soon_threadsafe(
+                        queue.put_nowait, {"type": "chunk", "content": "".join(buf_text)}
+                    )
+                buf_text = []
+                buf_suppressed = False
+
             try:
                 agent = get_agent()
                 for chunk in agent.stream({"messages": agent_messages}, stream_mode="messages"):
@@ -1030,22 +1124,38 @@ async def chat(session_id: str, request: Request):
                     if not isinstance(chunk, tuple) or len(chunk) < 2:
                         continue
                     msg, metadata = chunk[0], chunk[1]
-                    # 只输出 agent 节点（模型调用）产生的 AIMessage 文本内容。
-                    # langgraph 在 stream_mode="messages" 下会对同一消息 yield 多次
-                    # （作为某节点的输出，又作为下一节点的输入），所以必须用
-                    # metadata["langgraph_node"] 限定只取 "agent" 节点产生的消息，
-                    # 否则 ToolMessage 等工具返回结果会被重复输出到界面。
+
+                    # ── 调试：打印工具返回结果（只在后端控制台可见，不需要时整块注释掉）──
+                    if isinstance(msg, ToolMessage) and metadata.get("langgraph_node") == "tools":
+                        print(f"\n[Tool返回] {getattr(msg, 'name', '')}:\n{msg.content}\n")
+                    # ──────────────────────────────────────────────────────────
+
+                    # 只处理 agent 节点（模型调用）产生的消息；其他节点（工具返回等）说明
+                    # 上一条 agent 消息已结束，先收尾。langgraph 在 stream_mode="messages" 下
+                    # 会对同一消息 yield 多次（作为某节点的输出，又作为下一节点的输入），
+                    # 用 metadata["langgraph_node"] 限定可避免 ToolMessage 被重复输出到界面。
                     if metadata.get("langgraph_node") != "agent":
-                        continue
-                    # 跳过工具调用消息（含 tool_calls 时 content 通常为空字符串）
-                    if getattr(msg, "tool_calls", None):
+                        _close_message()
+                        cur_msg_id = None
                         continue
                     if isinstance(msg, ToolMessage):
                         continue
+
+                    # 消息 id 变化 → 上一条 agent 消息结束
+                    mid = getattr(msg, "id", None)
+                    if mid is not None and mid != cur_msg_id:
+                        _close_message()
+                        cur_msg_id = mid
+
+                    # 该消息含工具调用 → 属于过程性叙述，整条不展示
+                    if getattr(msg, "tool_calls", None):
+                        buf_suppressed = True
+
                     content = getattr(msg, "content", "")
-                    if not content or not isinstance(content, str):
-                        continue
-                    loop.call_soon_threadsafe(queue.put_nowait, {"type": "chunk", "content": content})
+                    if isinstance(content, str) and content:
+                        buf_text.append(content)
+
+                _close_message()
                 loop.call_soon_threadsafe(queue.put_nowait, {"type": "done"})
             except Exception as e:
                 logger.error(f"Agent 流式执行错误: {e}", exc_info=True)

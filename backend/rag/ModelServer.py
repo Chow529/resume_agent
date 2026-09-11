@@ -74,7 +74,7 @@ class SummServer:
 
 
     def __get_content(self, content: str) -> str:
-        return self.chain.invoke({"input": content})
+        return self.chain.invoke({"input": content}) + "\n 请根据以上JD信息进行面试"
 
     @property
     def content(self) -> str:

@@ -56,6 +56,7 @@ class AgentMemory:
             "created_at": int(time.time()),
             "db_session_id": None,
             "question_count": 0,
+            "selected_jd_id": None,
         }
         self._sessions[session_id] = session_data
         return session_data
@@ -196,6 +197,21 @@ class AgentMemory:
         self._persist_state(session_id)
         return session["question_count"]
 
+    def get_selected_jd_id(self, session_id: str) -> Optional[int]:
+        return self.ensure_session(session_id).get("selected_jd_id")
+
+    def set_selected_jd_id(self, session_id: str, jd_id: Optional[int]) -> None:
+        """设置本次面试选择的目标岗位 JD，并持久化到数据库（重登后仍可恢复）"""
+        self.ensure_session(session_id)["selected_jd_id"] = jd_id
+        db_session_id = self.get_db_session_id(session_id)
+        if not db_session_id:
+            return
+        try:
+            from sqlClass.chat_session_model import ChatSessionModel
+            ChatSessionModel().update_selected_jd(db_session_id, jd_id)
+        except Exception as e:
+            logger.error(f"持久化所选 JD 失败: {e}", exc_info=True)
+
     # ============================================================
     # 长记忆（数据库持久化）
     # ============================================================
@@ -294,6 +310,7 @@ class AgentMemory:
         history: List[BaseMessage] = []
         restored_status = "initialized"
         restored_question_count = 0
+        restored_selected_jd_id = None
 
         if session_id.startswith("sess_"):
             try:
@@ -305,9 +322,11 @@ class AgentMemory:
                     history = self.load_history(db_session_id)
                     restored_status = record.get("status") or "initialized"
                     restored_question_count = int(record.get("question_count") or 0)
+                    restored_selected_jd_id = record.get("selected_jd_id")
                     logger.info(
                         f"从数据库加载会话 {db_session_id}，共 {len(history)} 条历史消息，"
-                        f"状态={restored_status}，轮次={restored_question_count}"
+                        f"状态={restored_status}，轮次={restored_question_count}，"
+                        f"所选JD={restored_selected_jd_id}"
                     )
             except (ValueError, TypeError):
                 pass  # 不是 sess_<数字> 格式，继续创建新会话
@@ -323,6 +342,7 @@ class AgentMemory:
             "created_at": int(time.time()),
             "db_session_id": db_session_id,
             "question_count": restored_question_count,
+            "selected_jd_id": restored_selected_jd_id,
         }
         self._sessions[session_id] = session_data
         return session_data

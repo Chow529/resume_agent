@@ -1,4 +1,4 @@
--- dmmdb.users 定义
+-- users 定义（与线上库结构核对一致）
 
 CREATE TABLE `users` (
   `id` int unsigned NOT NULL AUTO_INCREMENT,
@@ -22,4 +22,4 @@ CREATE TABLE `users` (
   KEY `idx_status` (`is_active`,`is_locked`),
   KEY `idx_failed_attempts` (`failed_login_attempts`,`is_locked`),
   KEY `idx_password_changed` (`password_last_changed_at`)
-) ENGINE=InnoDB AUTO_INCREMENT=6 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
